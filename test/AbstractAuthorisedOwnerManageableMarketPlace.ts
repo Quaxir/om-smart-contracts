@@ -1,4 +1,4 @@
-import { generateFunctionSignedTokenWithAccount } from "../../src/utils"
+import { generateFunctionSignedTokenWithAccount } from "./utils"
 import * as path from "path"
 
 contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {

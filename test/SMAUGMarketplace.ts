@@ -1,6 +1,6 @@
 //TODO: Test instant rent with contract that does not support it
 
-import { generateFunctionSignedTokenWithAccount } from "../../src/utils"
+import { generateFunctionSignedTokenWithAccount } from "./utils"
 import * as path from "path"
 
 let Web3 = require("web3")
