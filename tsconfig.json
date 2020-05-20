@@ -1,16 +1,11 @@
 {
     "compilerOptions": {
-      "target": "es2017",
+      "target": "ES2018",
       "module": "commonjs",
       "strict": true,
       "moduleResolution": "node",
-      "noImplicitThis": true,
       "noImplicitAny": false,
-      "alwaysStrict": true,
-      "experimentalDecorators": true,
-      "emitDecoratorMetadata": true,
-      "forceConsistentCasingInFileNames": true,
-      "lib": ["es2015", "esnext.asynciterable"],
+      "lib": ["ES2018"],
       "sourceMap": true,
       "typeRoots": ["./node_modules/@types", "./types"],
       "types": ["node", "truffle-contracts"],
