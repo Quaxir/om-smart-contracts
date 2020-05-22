@@ -1,0 +1,3 @@
+host: "ws://127.0.0.1"
+port: 32771
+smart_contract_address: "0x8C39DdABC2B6c1EADE18EE9FA72350c2211FDA16"

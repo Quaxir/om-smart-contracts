@@ -1,5 +1,9 @@
-app
-build
-types
-node_modules
+solidity/app
+solidity/build
+solidity/types
+solidity/node_modules
+
+demo/node_modules
+demo/types
+
 .vscode
