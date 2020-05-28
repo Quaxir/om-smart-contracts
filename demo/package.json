@@ -5,20 +5,24 @@
   "scripts": {
     "postinstall": "npm run generateWeb3Types",
     "generateWeb3Types": "npx typechain --target=web3-v1 'config/abi/*.json'",
-    "start": "ts-node ./src/index.ts",
+    "start": "ts-node ./src/main.ts",
     "watch": "npx tsc -w"
   },
   "author": "Antonio Antonino <antonio.antonino@ericsson.com>",
   "license": "ISC",
+  "dependencies": {
+    "inquirer": "^7.1.0",
+    "js-yaml": "^3.13.1",
+    "web3": "^1.2.8",
+    "yargs": "^15.3.1"
+  },
   "devDependencies": {
     "@typechain/web3-v1": "^1.0.0",
+    "@types/inquirer": "^6.5.0",
     "@types/js-yaml": "^3.12.4",
+    "@types/yargs": "^15.0.5",
     "ts-node": "^8.10.1",
     "typechain": "^2.0.0",
     "typescript": "^3.9.3"
-  },
-  "dependencies": {
-    "js-yaml": "^3.13.1",
-    "web3": "^1.2.8"
   }
 }

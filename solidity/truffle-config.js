@@ -3,9 +3,9 @@ require("ts-node/register")
 module.exports = {
   migrations_directory: "./app/migrations",
   networks: {
-    local_ganache: {
+    marketplace: {
       host: "127.0.0.1",
-      port: 32771,
+      port: 8545,
       network_id: "*"
     }
   },
