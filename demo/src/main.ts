@@ -424,7 +424,7 @@ async function createAndDecideTestRequest() {
     }
     console.log(`New request with extra [${defaultExtra}] and ID ${requestID} created! 🙂🙂🙂`)
     
-    let offer1Extra = [1, 5, 0, 5, 1234567890]
+    let offer1Extra = [1, 5, 0, 5, web3MarketplaceInstance.utils.toHex("DID1")]
     console.log(`Creating test offer 1 with extra [${offer1Extra}]...`)
     let offer1TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offererCreator, gas: 200000})
     txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
@@ -441,7 +441,7 @@ async function createAndDecideTestRequest() {
     }
     console.log(`New offer with extra [${defaultExtra}] and ID ${offer1ID} created! 💰💰💰`)
 
-    let offer2Extra = [1, 5, 0, 5, 1234567890, 9876543210]
+    let offer2Extra = [1, 5, 0, 5, web3MarketplaceInstance.utils.toHex("DID2"), web3MarketplaceInstance.utils.toHex("AuthKey2")]
     console.log(`Creating test offer 2 with extra [${offer1Extra}]...`)
     let offer2TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offererCreator, gas: 200000})
     txStatus = (offer2TransactionResult.events!.FunctionStatus.returnValues.status) as number
