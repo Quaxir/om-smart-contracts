@@ -2,6 +2,7 @@ import { AbiItem } from "web3-utils"
 import { generateFunctionSignedTokenWithAccount } from "./utils"
 import * as path from "path"
 import * as fs from "fs"
+import { AssertionError } from "assert"
 
 contract("SMAUGMarketPlace", async accounts => {
 
@@ -678,6 +679,8 @@ contract("SMAUGMarketPlace", async accounts => {
         tx = await contract.interledgerReceive(givenNonce, givenOfferID, {from: owner})
         let eventGeneratedNonce = tx.logs[0].args.nonce
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")
+        let eventOfferFulfilledDetails = tx.logs[1]
+        assert.equal(eventOfferFulfilledDetails.args.offerID.toNumber(), offerID, "Offer ID specified in the event does not match the expected one.")
 
         // IL function called by someone that is not a manager
 

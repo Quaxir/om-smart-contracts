@@ -10,6 +10,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     event Debug(uint value);         // Temporary event, used for debugging purposes
     event Debug2(bytes valueBytes);
+    event OfferFulfilled(uint indexed offerID, bytes token);
 
     /*
     A request extra contains some easy-to-understand information plus an array fo pricing rules for instant rents.
@@ -469,9 +470,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function decideRequestInsecure(Request storage request, uint[] memory acceptedOfferIDs) internal returns (uint8 status) {
-        super.decideRequestInsecure(request, acceptedOfferIDs);
+        uint8 status = super.decideRequestInsecure(request, acceptedOfferIDs);
         // Generate interledger event
         emitRequestDecisionInterledgerEvent(acceptedOfferIDs);
+        return status;
     }
 
     function buildOfferExtraFromRawArray(uint[] memory extra) private pure returns (OfferExtra memory offerExtra) {
@@ -602,8 +604,9 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         }
 
         // TODO: Do something, i.e. move money and tokens around, store token somewhere.
-        // bytes memory encryptedToken = slice(data, 32, data.length-32);
+        bytes memory encryptedToken = slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
+        emit OfferFulfilled(offerID, encryptedToken);
     }
 
     // From: https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol#L227
