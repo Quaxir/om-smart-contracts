@@ -9,7 +9,7 @@ import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.
 contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, RequestArrayExtra, OfferArrayExtra, InterledgerSenderInterface, InterledgerReceiverInterface {
 
     event Debug(uint value);         // Temporary event, used for debugging purposes
-    event Debug(bytes valueBytes);
+    event Debug2(bytes valueBytes);
 
     /*
     A request extra contains some easy-to-understand information plus an array fo pricing rules for instant rents.

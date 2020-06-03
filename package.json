@@ -3,5 +3,36 @@
     "version": "1.0.0",
     "description": "Collection of smart contracts for the SMAUG marketplace.",
     "author": "Antonio Antonino <antonio.antonino@ericsson.com>",
-    "files": ["./solidity/"]
+    "scripts": {
+        "prepare": "npx typechain --target truffle",
+        "build": "npm run build:truffle && npm run build:contracts && npm run build:ts",
+        "build:truffle": "npx truffle compile",
+        "build:contracts": "npx typechain --target truffle './build/**/*.json'",
+        "build:ts": "npx tsc > /dev/null || true",
+        "test:truffle": "npx truffle test",
+        "test": "npm run build:truffle && npm run build:ts; npm run test:truffle",
+        "migrate": "npm run build; npx truffle migrate"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^2.5.0",
+        "sofie-interledger-contracts": "^0.3.0",
+        "sofie-offer-marketplace": "^0.1.0"
+    },
+    "devDependencies": {
+        "truffle": "^5.1.15",
+        "@types/bignumber.js": "^5.0.0",
+        "@types/chai": "^4.2.11",
+        "@types/mocha": "^7.0.2",
+        "@types/node": "^13.9.3",
+        "truffle-typings": "^1.0.8",
+        "ts-generator": "0.0.8",
+        "ts-node": "^8.8.1",
+        "typechain": "^1.0.5",
+        "typechain-target-truffle": "^1.0.2",
+        "typescript": "^3.8.3"
+    },
+    "files": [
+        "/solidity/contracts/**/*.sol",
+        "/solidity/build/contracts/*.json"
+    ]
 }
