@@ -23,6 +23,19 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "bytes",
+        "name": "valueBytes",
+        "type": "bytes"
+      }
+    ],
+    "name": "Debug",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint8",
         "name": "status",
         "type": "uint8"

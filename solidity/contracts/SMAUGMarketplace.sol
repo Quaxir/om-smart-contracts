@@ -9,6 +9,7 @@ import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.
 contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, RequestArrayExtra, OfferArrayExtra, InterledgerSenderInterface, InterledgerReceiverInterface {
 
     event Debug(uint value);         // Temporary event, used for debugging purposes
+    event Debug(bytes valueBytes);
 
     /*
     A request extra contains some easy-to-understand information plus an array fo pricing rules for instant rents.
@@ -579,7 +580,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return;
         }
 
-        uint offerID = toUint256(slice(data, 0, 32), 0);
+        uint offerID = abi.decode(slice(data, 0, 32), (uint256));
         (, bool isOfferDefined) = isOfferDefined(offerID);
 
         // Offer must be defined
@@ -601,6 +602,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         }
 
         // TODO: Do something, i.e. move money and tokens around, store token somewhere.
+        // bytes memory encryptedToken = slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
     }
 
