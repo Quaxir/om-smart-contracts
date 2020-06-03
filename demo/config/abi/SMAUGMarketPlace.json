@@ -28,7 +28,7 @@
         "type": "bytes"
       }
     ],
-    "name": "Debug",
+    "name": "Debug2",
     "type": "event"
   },
   {
@@ -125,6 +125,25 @@
       }
     ],
     "name": "OfferExtraAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "offerID",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "token",
+        "type": "bytes"
+      }
+    ],
+    "name": "OfferFulfilled",
     "type": "event"
   },
   {
