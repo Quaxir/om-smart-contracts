@@ -1,13 +1,11 @@
 import Web3 from "web3"
-import { AbiItem } from "web3-utils"
 import fs from "fs"
 
-import { SmaugMarketPlace as SMAUGMarketplace } from "../types/web3-v1-contracts/SMAUGMarketPlace"
+import { SmaugMarketPlace as SMAUGMarketplace, OfferFulfilled } from "../types/web3-v1-contracts/SMAUGMarketPlace"
 
 import * as utils from "./utils"
 import yargs from "yargs"
 import inquirer, { QuestionCollection } from "inquirer"
-import { EventEmitter } from "events"
 
 main().catch(error => {
     console.error(error)
@@ -20,6 +18,8 @@ main().catch(error => {
 var web3MarketplaceInstance: Web3
 var marketplaceOwner: string
 var SMAUGMarketplaceInstance: SMAUGMarketplace
+
+var unseenOfferFulfilledEvents: OfferFulfilled[]
 
 async function main() {
     const options = yargs
@@ -43,11 +43,15 @@ async function main() {
     }
     marketplaceOwner = options.o
 
+    unseenOfferFulfilledEvents = []
+
     await handleUserInput()
 }
 
 async function handleUserInput(): Promise<void> {
     while (true) {
+        printNewOffersFulfilled()
+        
         let answers = await inquirer.prompt([
             {
                 type: "list",
@@ -70,7 +74,11 @@ async function handleUserInput(): Promise<void> {
                         value: "automaticLifeCycle"
                     },
                     {
-                        name: "5) Exit",
+                        name: "5) Check for new acess tokens issued",
+                        value: "checkForOffersFulfilled"
+                    },
+                    {
+                        name: "6) Exit",
                         value: "exit"
                     }
                 ]
@@ -90,8 +98,23 @@ async function handleUserInput(): Promise<void> {
             case "automaticLifeCycle": {
                 await createAndDecideTestRequest(); break;
             }
+            case "checkForOffersFulfilled": {
+                printNewOffersFulfilled(true); break
+            }
             case "exit": { return }
         }
+    }
+}
+
+function printNewOffersFulfilled(force: boolean = false) {
+    if (unseenOfferFulfilledEvents.length > 0) {
+        console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
+        unseenOfferFulfilledEvents.forEach((offer, index) => {4
+            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID} - token: ${offer.returnValues.token}`)
+        })
+        unseenOfferFulfilledEvents = []
+    } else if (force) {     //unseenOfferFulfilledEvents.length == 0
+        console.log("No new offers have been fulfilled!")
     }
 }
 
@@ -363,21 +386,17 @@ async function handleRequestDecision(): Promise<void> {
     //     return
     // }
 
-    let promises = parsedOfferIDs.map(offerID => listenForOfferFulfillment(parseInt(offerID)))
-
-    await Promise.all(promises)
+    parsedOfferIDs.forEach(offerID => listenForOfferFulfillment(parseInt(offerID)))
 }
 
 async function listenForOfferFulfillment(offerID: number): Promise<void> {
-    await SMAUGMarketplaceInstance.once("OfferFulfilled", {filter: {offerID: offerID}}, (error, offerInfo) => {
+    SMAUGMarketplaceInstance.once("OfferFulfilled", {filter: {offerID: offerID}}, (error, offerInfo) => {
         if (error != null) {
             console.error(`Error while listening for OfferFulfilled events: ${error.message}`)
             return
         }
 
-        let offerID = offerInfo.returnValues.offerID
-        let encryptedToken = web3MarketplaceInstance.eth.abi.decodeParameter("string", offerInfo.returnValues.token)
-        console.log(`New offer fulfilled! OfferID = ${offerID}, token = ${encryptedToken}`)
+        unseenOfferFulfilledEvents.push(offerInfo)
     })
 }
 
@@ -457,23 +476,6 @@ async function createAndDecideTestRequest() {
     }
     console.log(`New offer with extra [${defaultExtra}] and ID ${offer1ID} created! 💰💰💰`)
 
-    // let offer2Extra = [1, 5, 0, 5, web3MarketplaceInstance.utils.toHex("DID2"), web3MarketplaceInstance.utils.toHex("AuthKey2")]
-    // console.log(`Creating test offer 2 with extra [${offer1Extra}]...`)
-    // let offer2TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offererCreator, gas: 200000})
-    // txStatus = (offer2TransactionResult.events!.FunctionStatus.returnValues.status) as number
-    // if (txStatus != 0) {
-    //     console.error(`submitOffer failed with status ${txStatus}`)
-    //     return
-    // }
-    // let offer2ID = offer2TransactionResult.events!.OfferAdded.returnValues.offerID as number
-    // let offer2ExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer2ID, offer2Extra).send({from: offererCreator, gas: 200000})
-    // txStatus = (offer2ExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    // if (txStatus != 0) {
-    //     console.error(`submitOfferArrayExtra failed with status ${txStatus}`)
-    //     return
-    // }
-    // console.log(`New offer with extra [${defaultExtra}] and ID ${offer2ID} created! 💰💰💰`)
-
     console.log(`Closing and deciding request ${requestID} by selecting ${[offer1ID]} as winning offers...`)
     let requestDecisionTransactionResults = await SMAUGMarketplaceInstance.methods.decideRequest(requestID, [offer1ID]).send({from: requestCreator, gas: 200000})
     if (requestDecisionTransactionResults.events!.RequestDecided == undefined) {
@@ -482,5 +484,5 @@ async function createAndDecideTestRequest() {
     }
     console.log("Request decision process succesfully completed! 💵💵💵")
 
-    await listenForOfferFulfillment(offer1ID)
+    listenForOfferFulfillment(offer1ID)
 }
