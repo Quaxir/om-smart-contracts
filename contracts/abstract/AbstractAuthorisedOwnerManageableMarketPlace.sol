@@ -12,10 +12,6 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
 
     event RequestDecided(uint requestID, uint[] winningOffersIDs);        // Event generated whenever the winning offers for a request are chosen
 
-    enum InterledgerEventType {
-        RequestDecision
-    }
-
     // Keeps track of what access tokens have been used already (to avoid token re-usage)
     mapping(bytes32 => bool) private usedTokens;
     bytes32[] private tokenReferences;

@@ -12,6 +12,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     event Debug2(bytes valueBytes);
     event OfferFulfilled(uint indexed offerID, bytes token);
 
+    enum InterledgerEventType {
+        RequestDecision
+    }
+
     /*
     A request extra contains some easy-to-understand information plus an array fo pricing rules for instant rents.
     An array of pricing rule has, for example, the following format:
@@ -212,7 +216,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             uint acceptedOfferID = acceptedOfferIDs[i];
             OfferExtra storage offerExtra = offersExtra[acceptedOfferID];
             bytes memory interledgerEventPayload = getInterledgerPayloadFromOfferExtra(acceptedOfferID, offerExtra);
-            emit InterledgerEventSending(uint8(InterledgerEventType.RequestDecision), interledgerEventPayload);
+            emit InterledgerEventSending(uint256(InterledgerEventType.RequestDecision), interledgerEventPayload);
         }
     }
 
@@ -566,7 +570,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     function interledgerAbort(uint256 id, uint256 reason) public {}
 
-    function interledgerCommit(uint256 identity, bytes memory data) public {}    
+    function interledgerCommit(uint256 id, bytes memory data) public {}    
 
     // Interledger receiver interface support
 
