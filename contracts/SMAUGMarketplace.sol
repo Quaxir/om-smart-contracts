@@ -43,7 +43,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         uint startOfRentTime;               // The proposed start time for the rent in this offer.
         uint duration;                      // The n. of minutes from startOfRentTime the rent would last.
         OfferType offerType;                // Specifies whether the money offered is for an auction or an instant buy offer.
-        uint pricePerMinute;                // The amount of money the user will pay per minute of locker usage.
+        uint priceOffered;                     // The amount of Ethers that the offer contained.
         uint offerCreatorDID;                    // The DID to decrypt the issued access token, in case the offer is selected.
         uint offerCreatorAuthenticationKey;      // OPTIONAL. This key would be used by the receiver of the access token to authenticate him/her self to the smart locker. If no key is provided in the offer, the generated token will be a bearer token.
     }
@@ -53,12 +53,14 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     uint private minimumNumberOfRequestExtraElements = 4;               // rules is optional
 
-    uint private minimumNumberOfOfferExtraElements = 5;                 // offerCreatorAuthenticationKey is optional
-    uint private maximumNumberOfOfferExtraElements = 6;
+    uint private minimumNumberOfOfferExtraElements = 4;                 // offerCreatorAuthenticationKey is optional
+    uint private maximumNumberOfOfferExtraElements = 5;
 
 
     mapping (uint => RequestExtra) private requestsExtra;
     mapping (uint => OfferExtra) private offersExtra;
+
+    mapping (uint => bool) private pendingPayments;                     // offerID -> true if the offer is pending
 
 
     constructor() AbstractAuthorisedOwnerManageableMarketPlace() public {
@@ -211,27 +213,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return decideRequestInsecure(request, acceptedOfferIDs);
     }
 
-    function emitRequestDecisionInterledgerEvent(uint[] memory acceptedOfferIDs) internal {
-        for (uint i = 0; i < acceptedOfferIDs.length; i++) {
-            uint acceptedOfferID = acceptedOfferIDs[i];
-            OfferExtra storage offerExtra = offersExtra[acceptedOfferID];
-            bytes memory interledgerEventPayload = getInterledgerPayloadFromOfferExtra(acceptedOfferID, offerExtra);
-            emit InterledgerEventSending(uint256(InterledgerEventType.RequestDecision), interledgerEventPayload);
-        }
-    }
-
-    // Returns either the concatenation of offer ID and winner DID (length = 64 hex chars), or the concatenation of offer ID, winner DID and winner authentication key (length = 96 hex chars).
-    function getInterledgerPayloadFromOfferExtra(uint offerID, OfferExtra storage offerExtra) private view returns (bytes memory) {
-        uint offerDID = offerExtra.offerCreatorDID;
-        uint offerCreatorAuthenticationKey = offerExtra.offerCreatorAuthenticationKey;
-        bytes memory offerIDBytes = toBytes(offerID);
-        bytes memory offerDIDBytes = toBytes(offerDID);
-        bytes memory result = concat(offerIDBytes, offerDIDBytes);
-        if (offerCreatorAuthenticationKey != 0) {
-            bytes memory offerCreatorAuthenticationKeyBytes = toBytes(offerCreatorAuthenticationKey);
-            result = concat(result, offerCreatorAuthenticationKeyBytes);
-        }
-        return result;
+    function decideRequestInsecure(Request storage request, uint[] memory acceptedOfferIDs) internal returns (uint8) {
+        uint8 status = super.decideRequestInsecure(request, acceptedOfferIDs);
+        // Generate interledger event
+        emitRequestDecisionInterledgerEvent(acceptedOfferIDs);
+        return status;
     }
 
     // From https://ethereum.stackexchange.com/questions/4170/how-to-convert-a-uint-to-bytes-in-solidity/4177#4177
@@ -418,66 +404,79 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         super.submitOffer(requestID);
     }
 
-    function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external returns (uint8 status, uint offID) {
-        if (extra.length < minimumNumberOfOfferExtraElements || extra.length > maximumNumberOfOfferExtraElements) {
-            emit FunctionStatus(InvalidInput);
-            return (InvalidInput, 0);
-        }
+    function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external payable returns (uint8 status, uint offID) {
+        require(
+            extra.length >= minimumNumberOfOfferExtraElements && extra.length <= maximumNumberOfOfferExtraElements,
+            stringifyStatusCode(InvalidInput)
+        );
 
         Offer storage offer = offers[offerID];
 
-        if(!offer.isDefined) {
-            emit FunctionStatus(UndefinedID);
-            return (UndefinedID, 0);
-        }
+        require(
+            offer.isDefined,
+            stringifyStatusCode(UndefinedID)
+        );
 
-        if(offer.offStage != Stage.Pending) {
-            emit FunctionStatus(NotPending);
-            return (NotPending, 0);
-        }
+        require(
+            offer.offStage == Stage.Pending,
+            stringifyStatusCode(NotPending)
+        );
 
-        if(offer.offerMaker != msg.sender) {
-            emit FunctionStatus(AccessDenied);
-            return (AccessDenied, 0);
-        }
+        require(
+            offer.offerMaker == msg.sender,
+            stringifyStatusCode(AccessDenied)
+        );
 
         Request storage request = requests[offer.requestID];
 
-        if(request.reqStage != Stage.Open) {
-            emit FunctionStatus(RequestNotOpen);
-            return (RequestNotOpen, 0);
-        }
+        require(
+            request.reqStage == Stage.Open,
+            stringifyStatusCode(RequestNotOpen)
+        );
 
         RequestExtra storage requestExtra = requestsExtra[request.ID];
         OfferExtra memory offerExtra = buildOfferExtraFromRawArray(extra);
 
-        uint8 validationStatusCode = validateOfferExtraAgainstRequestExtra(requestExtra, offerExtra);
+        validateOfferExtraAndPaymentAgainstRequestExtra(requestExtra, offerExtra, msg.value);
 
-        if (validationStatusCode != Successful) {
-            emit FunctionStatus(validationStatusCode);
-            return (validationStatusCode, 0);
-        }
-
+        updateOfferAndRegisterPendingPayment(offerExtra, offerID, msg.value);
         offersExtra[offerID] = offerExtra;
         offer.offStage = Stage.Open;
 
-        (uint8 _status, uint _offID) = super.finishSubmitOfferExtra(offerID);
+        (uint8 _offerSubmissionStatus,) = super.finishSubmitOfferExtra(offerID);
+
+        require(
+            _offerSubmissionStatus == Successful,
+            stringifyStatusCode(_offerSubmissionStatus)
+        );
 
         // If the instant rent offer is valid, decide the request with that offer as winning one.
         if (offerExtra.offerType == OfferType.InstantRent) {
             uint[] memory decidedOffers = new uint[](1);
             decidedOffers[0] = offerID;
-            return (decideRequestInsecure(request, decidedOffers), offerID);
-        } else {
-            return (_status, _offID);
+            uint8 _requestDecisionStatus = decideRequestInsecure(request, decidedOffers);
+
+            require(
+                _requestDecisionStatus == Successful,
+                stringifyStatusCode(_requestDecisionStatus)
+            );
         }
+        return (Successful, offerID);
     }
 
-    function decideRequestInsecure(Request storage request, uint[] memory acceptedOfferIDs) internal returns (uint8 status) {
-        uint8 status = super.decideRequestInsecure(request, acceptedOfferIDs);
-        // Generate interledger event
-        emitRequestDecisionInterledgerEvent(acceptedOfferIDs);
-        return status;
+    //TODO: Fix the stringifyStatusCode function && adjust test cases accordingly.
+
+    // Adapted from https://stackoverflow.com/a/47137572
+    function stringifyStatusCode(uint8 code) private pure returns (string memory) {
+        bytes32 codeBytes = bytes32(code);
+        bytes memory bytesString = new bytes(32);
+        for (uint j = 0; j < 32; j++) {
+            byte char = byte(bytes32(uint(codeBytes) * 2 ** (8 * j)));
+            if (char != 0) {
+                bytesString[j] = char;
+            }
+        }
+        return string(bytesString);
     }
 
     function buildOfferExtraFromRawArray(uint[] memory extra) private pure returns (OfferExtra memory offerExtra) {
@@ -485,46 +484,75 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         _offerExtra.startOfRentTime = extra[0];
         _offerExtra.duration = extra[1];
         _offerExtra.offerType = OfferType(extra[2]);
-        _offerExtra.pricePerMinute = extra[3];
-        _offerExtra.offerCreatorDID = extra[4];
-        if (extra.length == 6) {
-            _offerExtra.offerCreatorAuthenticationKey = extra[5];
+        _offerExtra.offerCreatorDID = extra[3];
+        if (extra.length == 5) {
+            _offerExtra.offerCreatorAuthenticationKey = extra[4];
         }
 
         return _offerExtra;
     }
 
-    function validateOfferExtraAgainstRequestExtra(RequestExtra storage requestExtra, OfferExtra memory offerExtra)
-        private view returns (uint8 statusCode) {
+    function validateOfferExtraAndPaymentAgainstRequestExtra(RequestExtra storage requestExtra, OfferExtra memory offerExtra, uint paymentAmount)
+        private view {
 
             // The offer must start later than the request
-            if (offerExtra.startOfRentTime < requestExtra.startOfRentTime) {
-                return OfferExtraInvalid;
-            }
+            require(
+                offerExtra.startOfRentTime >= requestExtra.startOfRentTime,
+                stringifyStatusCode(OfferExtraInvalid)
+            );
 
             // The offer must finish earlier than the request
-            if (offerExtra.startOfRentTime + offerExtra.duration > requestExtra.startOfRentTime + requestExtra.duration) {
-                return OfferExtraInvalid;
-            }
+            require(
+                offerExtra.startOfRentTime + offerExtra.duration <= requestExtra.startOfRentTime + requestExtra.duration,
+                stringifyStatusCode(OfferExtraInvalid)
+            );
 
-            // If it is an auction bid, the minimum price condition must be satisfied
-            if (offerExtra.offerType == OfferType.Auction) {
-                if (requestExtra.auctionMinPricePerSlot > offerExtra.pricePerMinute) {
-                    return OfferExtraInvalid;
-                }
-            } else {    // If instant rent, match the pricing rules
+            if (offerExtra.offerType == OfferType.Auction) {    // If it is an auction bid, the minimum price condition must be satisfied
+                require(
+                    requestExtra.auctionMinPricePerSlot * offerExtra.duration <= paymentAmount,
+                    stringifyStatusCode(InsufficientEscrowPayment)
+                );
+            } else {    // If instant rent, it must match the pricing rules
                 InstantRentPricingRule[] storage requestRules = requestExtra.rules;
-                if (requestRules.length == 0) {         // Instant rent not supported
-                    return InstantRentNotSupported;
-                }
+                require(
+                    requestRules.length > 0,                        // Instant rent not supported
+                    stringifyStatusCode(InstantRentNotSupported)
+                );
 
                 uint minimumPriceToPay = getExpectedInstantRentPriceForOfferDuration(requestRules, offerExtra.duration);
-                if (minimumPriceToPay > offerExtra.pricePerMinute) {
-                    return OfferExtraInvalid;
-                }
+                require(
+                    minimumPriceToPay <= paymentAmount,
+                    stringifyStatusCode(InsufficientEscrowPayment)
+                );
             }
+    }
 
-            return Successful;
+    function updateOfferAndRegisterPendingPayment(OfferExtra memory offerExtra, uint offerID, uint paymentAmount) internal {
+        offerExtra.priceOffered = paymentAmount;
+        pendingPayments[offerID] = true;
+    }
+
+    function emitRequestDecisionInterledgerEvent(uint[] memory acceptedOfferIDs) internal {
+        for (uint i = 0; i < acceptedOfferIDs.length; i++) {
+            uint acceptedOfferID = acceptedOfferIDs[i];
+            OfferExtra storage offerExtra = offersExtra[acceptedOfferID];
+            bytes memory interledgerEventPayload = getInterledgerPayloadFromOfferExtra(acceptedOfferID, offerExtra);
+            emit InterledgerEventSending(uint256(InterledgerEventType.RequestDecision), interledgerEventPayload);
+        }
+    }
+
+    // Returns either the concatenation of offer ID and winner DID (length = 64 hex chars), or the concatenation of offer ID, winner DID and winner authentication key (length = 96 hex chars).
+    function getInterledgerPayloadFromOfferExtra(uint offerID, OfferExtra storage offerExtra) private view returns (bytes memory) {
+        uint offerDID = offerExtra.offerCreatorDID;
+        uint offerCreatorAuthenticationKey = offerExtra.offerCreatorAuthenticationKey;
+        bytes memory offerIDBytes = toBytes(offerID);
+        bytes memory offerDIDBytes = toBytes(offerDID);
+        bytes memory result = concat(offerIDBytes, offerDIDBytes);
+        if (offerCreatorAuthenticationKey != 0) {
+            bytes memory offerCreatorAuthenticationKeyBytes = toBytes(offerCreatorAuthenticationKey);
+            result = concat(result, offerCreatorAuthenticationKeyBytes);
+        }
+        return result;
     }
 
     function getExpectedInstantRentPriceForOfferDuration(InstantRentPricingRule[] storage rules, uint offerDuration)
@@ -540,7 +568,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function getOfferExtra(uint offerIdentifier)
-    public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint pricePerMinute, uint offerCreatorDID, uint offerCreatorAuthenticationKey) {
+    public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint priceOffered, uint offerCreatorDID, uint offerCreatorAuthenticationKey) {
         Offer storage offer = offers[offerIdentifier];
 
         if(!offer.isDefined) {
@@ -554,7 +582,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             offerExtra.startOfRentTime,
             offerExtra.duration,
             offerExtra.offerType,
-            offerExtra.pricePerMinute,
+            offerExtra.priceOffered,
             offerExtra.offerCreatorDID,
             offerExtra.offerCreatorAuthenticationKey
         );

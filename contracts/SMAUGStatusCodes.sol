@@ -7,4 +7,5 @@ contract SMAUGStatusCodes is StatusCodes {
     uint8 constant internal TokenAlreadyUsed = 101;
     uint8 constant internal OfferExtraInvalid = 102;
     uint8 constant internal InstantRentNotSupported = 103;
+    uint8 constant internal InsufficientEscrowPayment = 104;
 }

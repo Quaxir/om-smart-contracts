@@ -5,5 +5,5 @@ interface RequestArrayExtra {
 }
 
 interface OfferArrayExtra {
-    function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external returns (uint8 status, uint offID);
+    function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external payable returns (uint8 status, uint offID);
 }

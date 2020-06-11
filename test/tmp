@@ -1,17 +1,3 @@
-import { AbiItem } from "web3-utils"
-import { generateFunctionSignedTokenWithAccount } from "./utils"
-import * as path from "path"
-import * as fs from "fs"
-import { AssertionError } from "assert"
-
-contract("SMAUGMarketPlace", async accounts => {
-
-    const SMAUGMarketPlace = artifacts.require("SMAUGMarketPlace")
-    const SMAUGMarketPlaceABIFile = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "build", "contracts", "SMAUGMarketPlace.json")).toString())
-    const SMAUGMarketplaceABI = SMAUGMarketPlaceABIFile.abi as AbiItem[]
-    const submitRequestMethodName = "submitRequest"
-    const BN = web3.utils.BN
-
     // it("RequestArrayExtra interface conformance", async () => {
     //     let contract = await SMAUGMarketPlace.deployed()
     //     let interfaceMethodSelectorEncoded = web3.eth.abi.encodeFunctionSignature("submitRequestArrayExtra(uint256,uint256[])")
@@ -360,342 +346,251 @@ contract("SMAUGMarketPlace", async accounts => {
     //     assert.equal(txStatusCode, 4, "Offer submission should fail because the request is not open.")
     // })
 
-    it("submitOfferArrayExtra & getOfferExtra", async () => {
-        let owner = accounts[0]
-        let requestCreator = accounts[1]
-        let offerCreator = accounts[2]
-        let contract = await SMAUGMarketPlace.new({from: owner})
 
-        // Valid auction offer extra submission with no authentication key
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        let requestID = tx.logs[1].args.requestID.toNumber()
-        let requestStartingTime = 1
-        let requestDuration = 5
-        let requestMinAuctionPrice = 10
-        await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, requestMinAuctionPrice, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        let offerID = tx.logs[1].args.requestID.toNumber()
-        let offerWei = requestDuration * requestMinAuctionPrice
-        let inputOfferCreatorDID = web3.utils.stringToHex("2wJPyULfLLnYTEFYzByfUR")
-        let contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorDID)], {from: offerCreator, value: `${offerWei}`})
-        let txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
-        let contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        let offerExtraDetails = await contract.getOfferExtra(offerID)
-        let txStatus = offerExtraDetails.status
-        let offerStartingTime = offerExtraDetails.startOfRentTime
-        let offerType = offerExtraDetails.offerType
-        let offerWeiRegistered = offerExtraDetails.priceOffered.toNumber()
-        let offerCreatorDID = offerExtraDetails.offerCreatorDID
-        let offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
-        assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
-        assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
-        assert.equal(offerType, 0, "Wrong offerType returned.")
-        assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
-        assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), "0x0", "Wrong offerCreatorAuthenticationKey returned")
-        assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
-        // Valid auction offer extra submission with authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        requestStartingTime = 1
-        requestDuration = 5
-        requestMinAuctionPrice = 10
-        await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, requestMinAuctionPrice, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
-        offerWei = requestDuration * requestMinAuctionPrice
-        let inputAuthenticationKey = "0xa5b9d60f32436310afebcfda832817a68921beb782fabf7915cc0460b443116a"
-        contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorDID), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
-        contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        offerExtraDetails = await contract.getOfferExtra(offerID)
-        txStatus = offerExtraDetails.status
-        offerStartingTime = offerExtraDetails.startOfRentTime
-        offerType = offerExtraDetails.offerType
-        offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
-        offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
-        assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
-        assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
-        assert.equal(offerType, 0, "Wrong offerType returned.")
-        assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
-        assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), inputAuthenticationKey, "Wrong offerCreatorAuthenticationKey returned")
-        assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
-        // Valid instant rent offer extra submission with no authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
-        offerWei = requestDuration * 1
-        contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorDID)], {from: offerCreator, value: `${offerWei}`})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
-        contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        let winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
-        assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
-        assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
-        let isRequestDecided = (await contract.isRequestDecided(requestID))[1]
-        assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
-        let requestDecision = await contract.getRequestDecision(requestID)
-        winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
-        assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
-        assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
-        offerExtraDetails = await contract.getOfferExtra(offerID)
-        txStatus = offerExtraDetails.status
-        offerStartingTime = offerExtraDetails.startOfRentTime
-        offerType = offerExtraDetails.offerType
-        offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
-        offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
-        assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
-        assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
-        assert.equal(offerType, 1, "Wrong offerType returned.")
-        assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
-        assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), "0x0", "Wrong offerCreatorAuthenticationKey returned")
-        assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
-        // Valid instant rent offer extra submission with authentication key
+    //     // Valid instant rent offer extra submission with no authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
-        offerWei = requestDuration * 1
-        contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorDID), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
-        contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
-        assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
-        assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
-        isRequestDecided = (await contract.isRequestDecided(requestID))[1]
-        assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
-        requestDecision = await contract.getRequestDecision(requestID)
-        winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
-        assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
-        assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
-        offerExtraDetails = await contract.getOfferExtra(offerID)
-        txStatus = offerExtraDetails.status
-        offerStartingTime = offerExtraDetails.startOfRentTime
-        offerType = offerExtraDetails.offerType
-        offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
-        offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
-        assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
-        assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
-        assert.equal(offerType, 1, "Wrong offerType returned.")
-        assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
-        assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), inputAuthenticationKey, "Wrong offerCreatorAuthenticationKey returned")
-        assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.requestID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, 1, web3.utils.toBN(inputOfferCreatorDID)], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
+    //     let winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
+    //     assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
+    //     assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
+    //     let isRequestDecided = (await contract.isRequestDecided(requestID))[1]
+    //     assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
+    //     let requestDecision = await contract.getRequestDecision(requestID)
+    //     winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
+    //     assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
+    //     assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
+    //     offerExtraDetails = await contract.getOfferExtra(offerID)
+    //     txStatus = offerExtraDetails.status
+    //     offerStartingTime = offerExtraDetails.startOfRentTime
+    //     offerType = offerExtraDetails.offerType
+    //     offerCreatorDID = offerExtraDetails.offerCreatorDID
+    //     offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
+    //     assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
+    //     assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
+    //     assert.equal(offerType, 1, "Wrong offerType returned.")
+    //     assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+    //     assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), "0x0", "Wrong offerCreatorAuthenticationKey returned")
 
-        // Invalid offer extra submission (array needs to be long either 4 or 5)
+    //     // Valid instant rent offer extra submission with authentication key
 
-        let invalidExtras = [
-            [],
-            [1],
-            [1, 2],
-            [1, 2, 3],
-            [1, 2, 3, 4, 5, 6]
-        ]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        for (let invalidExtra of invalidExtras) {
-            tx = await contract.submitOffer(requestID, {from: offerCreator})
-            offerID = tx.logs[1].args.offerID.toNumber()
-            contractBalanceBeforeOffer = new BN(await web3.eth.getBalance(contract.address)).toNumber()
-            try {
-                tx = await contract.submitOfferArrayExtra(offerID, invalidExtra, {from: offerCreator, value: "1"})
-            } catch (e) {
-                console.log(e)
-                assert.equal(e.message, "12", "Offer extra addition should failed because extra array is invalid.")
-                contractBalanceAfterOffer = new BN(await web3.eth.getBalance(contract.address)).toNumber()
-                assert.equal(contractBalanceBeforeOffer, contractBalanceAfterOffer, "Account balance for marketplace should be the same as before the failed offer.")                
-            }
-        }
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.requestID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, 1, web3.utils.toBN(inputOfferCreatorDID), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
+    //     winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
+    //     assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
+    //     assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
+    //     isRequestDecided = (await contract.isRequestDecided(requestID))[1]
+    //     assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
+    //     requestDecision = await contract.getRequestDecision(requestID)
+    //     winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
+    //     assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
+    //     assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
+    //     offerExtraDetails = await contract.getOfferExtra(offerID)
+    //     txStatus = offerExtraDetails.status
+    //     offerStartingTime = offerExtraDetails.startOfRentTime
+    //     offerType = offerExtraDetails.offerType
+    //     offerCreatorDID = offerExtraDetails.offerCreatorDID
+    //     offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
+    //     assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
+    //     assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
+    //     assert.equal(offerType, 1, "Wrong offerType returned.")
+    //     assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+    //     assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), inputAuthenticationKey, "Wrong offerCreatorAuthenticationKey returned")
 
-        // Undefined offer ID
+    //     // Invalid request extra submission (array needs to be at least 5-element long)
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOfferArrayExtra(99999, [1, 1, 0, 1], {from: offerCreator, value: "1"})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 2, "Offer extra submission should fail because offer specified does not exist.")
+    //     let invalidExtras = [
+    //         [],
+    //         [1],
+    //         [1, 2],
+    //         [1, 2, 3],
+    //         [1, 2, 3, 4],
+    //         [1, 2, 3, 4, 5, 6, 7]
+    //     ]
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     for (let invalidExtra of invalidExtras) {
+    //         tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //         offerID = tx.logs[1].args.offerID.toNumber()
+    //         tx = await contract.submitOfferArrayExtra(offerID, invalidExtra, {from: offerCreator})
+    //         txStatusCode = tx.logs[0].args.status.toNumber()
+    //         assert.equal(txStatusCode, 12, "Offer extra addition should failed because extra array is invalid.")
+    //     }
 
-        // Not-pending offer
+    //     // Undefined offer ID
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})           // Closing the request
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 5, "Offer extra submission should fail because the request has alredy been opened (not pending anymore).")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOfferArrayExtra(99999, [1, 1, 0, 1, 1], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 2, "Offer extra submission should fail because offer specified does not exist.")
 
-        // Offer extra creator != offer creator
+    //     // Not-pending offer
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        let offerExtraCreator = accounts[9]
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerExtraCreator, value: "1"})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 1, "Offer extra submission should fail because the creator of the offer extra != offer creator.")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})           // Closing the request
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 5, "Offer extra submission should fail because the request has alredy been opened (not pending anymore).")
 
-         // Not-open request
+    //     // Offer extra creator != offer creator
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 4, "Offer extra submission should fail because the request is still pending (not open yet).")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     let offerExtraCreator = accounts[9]
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerExtraCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 1, "Offer extra submission should fail because the creator of the offer extra != offer creator.")
 
-        // Offer start time < request start time
+    //      // Not-open request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        requestStartingTime = 1
-        await contract.submitRequestArrayExtra(requestID, [requestStartingTime, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime-1, 1, 0, 1], {from: offerCreator, value: "1"})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 102, "Offer extra submission should fail because the offer starts earlier than the request starting time.")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 4, "Offer extra submission should fail because the request is still pending (not open yet).")
 
-        // Offer end time > request end time
+    //     // Offer start time < request start time
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        requestStartingTime = 1
-        requestDuration = 5
-        await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration+1, 0, 1], {from: offerCreator, value: "1"})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 102, "Offer extra submission should fail because the offer ends later than the request end time.")  
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     requestStartingTime = 1
+    //     await contract.submitRequestArrayExtra(requestID, [requestStartingTime, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.requestID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime-1, 1, 0, 1, 1], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 102, "Offer extra submission should fail because the offer starts earlier than the request starting time.")
 
-        // Auction offer price < min price asked in the request
+    //     // Offer end time > request end time
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        let minAuctionPrice = 5
-        await contract.submitRequestArrayExtra(requestID, [1, 1, minAuctionPrice, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        try {
-            let offerDuration = 1
-            tx = await contract.submitOfferArrayExtra(offerID, [1, offerDuration, 0, 1], {from: offerCreator, value: `${offerDuration*minAuctionPrice - 1}`})
-            assert.isTrue(false, "Offer extra submission should fail because the money offerred does not meet the request minimum requirements.")
-        } catch (e) {
-            assert.isTrue(e.message.includes("Escrow payment"), "Unexpected error thrown by marketplace smart contract.")
-        }
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     requestStartingTime = 1
+    //     requestDuration = 5
+    //     await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration+1, 0, 1, 1], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 102, "Offer extra submission should fail because the offer ends later than the request end time.")  
 
-        // Instant rent offer for auction-only request
+    //     // Auction offer price < min price asked in the request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})             // Extra array length == 4 -> No pricing rule is specified -> Instant rent not supported
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 1, 1], {from: offerCreator, value: "1"})           // Offer type == 1 -> instant rent offer
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 103, "Offer extra submission for instant rent should fail becase request only accepts auction requests.")
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     let minAuctionPrice = 5
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, minAuctionPrice, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, minAuctionPrice-1, 1], {from: offerCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 102, "Offer extra submission should fail because the offer ends later than the request end time.")
 
-        // Instant rent prices tests
+    //     // Instant rent offer for auction-only request
 
-        let requestInstantRentRules = [
-            [1, 50],
-            [5, 50],
-            [1, 50, 5, 40],
-            [1, 50, 5, 40, 10, 40],
-            [1, 50, 5, 40, 10, 30]
-        ]
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})             // Extra array length == 4 -> No pricing rule is specified -> Instant rent not supported
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 1, 1, 1], {from: offerCreator})           // Offer type == 1 -> instant rent offer
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 103, "Offer extra submission for instant rent should fail becase request only accepts auction requests.")
 
-        let offerOfferedPrices = [
-            [
-                [[1, 49], [1, 50], [2, 50], [2, 49]],
-                [102, 0, 0, 102]
-            ],
-            [
-                [[4, 49], [4, 50], [5, 50], [5, 49]],
-                [102, 0, 0, 102]
-            ],
-            [
-                [[1, 49], [1, 50], [4, 50], [4, 49], [5, 40], [5, 39], [6, 40], [6, 39]],
-                [102, 0, 0, 102, 0, 102, 0, 102]
-            ],
-            [
-                [[9, 40], [9, 39], [10, 40], [10, 39], [11, 40], [11, 39]],
-                [0, 102, 0, 102, 0, 102]
-            ],
-            [
-                [[9, 40], [9, 39], [10, 30], [10, 29], [11, 30], [11, 29]],
-                [0, 102, 0, 102, 0, 102]
-            ]
-        ]
+    //     // Instant rent prices tests
 
-        for (let i = 2; i < 4; i++) {
-            let requestInstantRules = requestInstantRentRules[i]
-            let offerDetails = offerOfferedPrices[i][0]
-            let expectedStatusCodes = offerOfferedPrices[i][1]
+    //     let requestInstantRentRules = [
+    //         [1, 50],
+    //         [5, 50],
+    //         [1, 50, 5, 40],
+    //         [1, 50, 5, 40, 10, 40],
+    //         [1, 50, 5, 40, 10, 30]
+    //     ]
 
-            for (let j = 0; j < offerDetails.length; j++) {
-                let offerDuration = offerDetails[i][0]
-                let offerPrice = offerDetails[i][1]
-                let expectedStatusCode = expectedStatusCodes[i]
+    //     let offerOfferedPrices = [
+    //         [
+    //             [[1, 49], [1, 50], [2, 50], [2, 49]],
+    //             [102, 0, 0, 102]
+    //         ],
+    //         [
+    //             [[4, 49], [4, 50], [5, 50], [5, 49]],
+    //             [102, 0, 0, 102]
+    //         ],
+    //         [
+    //             [[1, 49], [1, 50], [4, 50], [4, 49], [5, 40], [5, 39], [6, 40], [6, 39]],
+    //             [102, 0, 0, 102, 0, 102, 0, 102]
+    //         ],
+    //         [
+    //             [[9, 40], [9, 39], [10, 40], [10, 39], [11, 40], [11, 39]],
+    //             [0, 102, 0, 102, 0, 102]
+    //         ],
+    //         [
+    //             [[9, 40], [9, 39], [10, 30], [10, 29], [11, 30], [11, 29]],
+    //             [0, 102, 0, 102, 0, 102]
+    //         ]
+    //     ]
 
-                requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-                tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
-                requestID = tx.logs[1].args.requestID.toNumber()
-                await contract.submitRequestArrayExtra(requestID, [1, 100, 1].concat(requestInstantRules).concat(1), {from: requestCreator})
-                tx = await contract.submitOffer(requestID, {from: offerCreator})
-                offerID = tx.logs[1].args.offerID.toNumber()
-                try {
-                    tx = await contract.submitOfferArrayExtra(offerID, [1, offerDuration, 1, 1], {from: offerCreator, value: `${offerPrice}`})      // OfferType = 1 -> Instant rent offer
-                } catch (e) {
-                    assert.isTrue(e.message.includes("Escrow payment"), "Unexpected error thrown by marketplace smart contract.")
-                    break
-                }
-                txStatusCode = tx.logs[0].args.status.toNumber()
-                assert.equal(txStatusCode, expectedStatusCode, "Offer extra submission returned a wrong status code.")
-            }
-        }
-    })
+    //     for (let i = 0; i < requestInstantRentRules.length; i++) {
+    //         let requestInstantRules = requestInstantRentRules[i]
+    //         let offerDetails = offerOfferedPrices[i][0]
+    //         let expectedStatusCodes = offerOfferedPrices[i][1]
+
+    //         for (let j = 0; j < offerDetails.length; j++) {
+    //             let offerDuration = offerDetails[i][0]
+    //             let offerPrice = offerDetails[i][1]
+    //             let expectedStatusCode = expectedStatusCodes[i]
+
+    //             requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //             tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+    //             requestID = tx.logs[1].args.requestID.toNumber()
+    //             await contract.submitRequestArrayExtra(requestID, [1, 100, 1].concat(requestInstantRules).concat(1), {from: requestCreator})
+    //             tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //             offerID = tx.logs[1].args.offerID.toNumber()
+    //             tx = await contract.submitOfferArrayExtra(offerID, [1, offerDuration, 1, offerPrice, 1], {from: offerCreator})      // OfferType = 1 -> Instant rent offer
+    //             txStatusCode = tx.logs[0].args.status.toNumber()
+    //             assert.equal(txStatusCode, expectedStatusCode, "Offer extra submission returned a wrong status code.")
+    //         }
+    //     }
+    // })
 
     // it("interledgerReceive()", async () => {
     //     let owner = accounts[0]
@@ -711,7 +606,7 @@ contract("SMAUGMarketPlace", async accounts => {
     //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
     //     tx = await contract.submitOffer(requestID, {from: offerCreator})
     //     let offerID = tx.logs[1].args.requestID.toNumber()
-    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})
     //     await contract.decideRequest(requestID, [offerID], {from: requestCreator})
     //     let givenNonce = 1
     //     let givenOfferID = "0x" + `${offerID}`.padStart(64, "0")
@@ -731,7 +626,7 @@ contract("SMAUGMarketPlace", async accounts => {
     //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
     //     await contract.submitOffer(requestID, {from: offerCreator})
     //     offerID = tx.logs[1].args.requestID.toNumber()
-    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})
     //     await contract.decideRequest(requestID, [offerID], {from: requestCreator})
     //     givenNonce = 1
     //     givenOfferID = "0x" + `${offerID}`.padStart(64, "0")
@@ -751,7 +646,7 @@ contract("SMAUGMarketPlace", async accounts => {
     //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
     //     await contract.submitOffer(requestID, {from: offerCreator})
     //     offerID = tx.logs[1].args.requestID.toNumber()
-    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})
     //     await contract.decideRequest(requestID, [offerID], {from: requestCreator})
     //     givenNonce = 1
     //     givenOfferID = "0x" + "999".padStart(64, "0")
@@ -771,7 +666,7 @@ contract("SMAUGMarketPlace", async accounts => {
     //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
     //     await contract.submitOffer(requestID, {from: offerCreator})
     //     offerID = tx.logs[1].args.requestID.toNumber()
-    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: "1"})
+    //     tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1, 1], {from: offerCreator})
     //     givenNonce = 1
     //     givenOfferID = "0x" + `${offerID}`.padStart(64, "0")
     //     tx = await contract.interledgerReceive(givenNonce, givenOfferID, {from: owner})
@@ -781,5 +676,3 @@ contract("SMAUGMarketPlace", async accounts => {
     //     assert.equal(txStatusCode, 6, "interledgerReceive() should fail and emit ReqNotDecided status code.")
     //     assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because offer specified is not defined.")
     //     assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")
-    // })
-})
