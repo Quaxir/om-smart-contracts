@@ -464,19 +464,26 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return (Successful, offerID);
     }
 
-    //TODO: Fix the stringifyStatusCode function && adjust test cases accordingly.
-
-    // Adapted from https://stackoverflow.com/a/47137572
+    // From https://github.com/provable-things/ethereum-api/blob/master/oraclizeAPI_0.5.sol#L1045
     function stringifyStatusCode(uint8 code) private pure returns (string memory) {
-        bytes32 codeBytes = bytes32(code);
-        bytes memory bytesString = new bytes(32);
-        for (uint j = 0; j < 32; j++) {
-            byte char = byte(bytes32(uint(codeBytes) * 2 ** (8 * j)));
-            if (char != 0) {
-                bytesString[j] = char;
-            }
+        if (code == 0) {
+            return "0";
         }
-        return string(bytesString);
+
+        uint j = code;
+        uint len;
+        while (j > 0) {
+            len++;
+            j /= 10;
+        }
+        
+        bytes memory bstr = new bytes(len);
+        uint k = len - 1;
+        while (code != 0) {
+            bstr[k--] = byte(uint8(48 + code % 10));
+            code /= 10;
+        }
+        return string(bstr);
     }
 
     function buildOfferExtraFromRawArray(uint[] memory extra) private pure returns (OfferExtra memory offerExtra) {
