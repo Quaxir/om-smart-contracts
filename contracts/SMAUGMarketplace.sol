@@ -5,6 +5,7 @@ import { InterledgerSenderInterface } from "sofie-interledger-contracts/contract
 
 import { AbstractAuthorisedOwnerManageableMarketPlace } from "./abstract/AbstractAuthorisedOwnerManageableMarketPlace.sol";
 import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.sol";
+import { UtilsLibrary } from "./libraries/UtilsLibrary.sol";
 
 contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, RequestArrayExtra, OfferArrayExtra, InterledgerSenderInterface, InterledgerReceiverInterface {
 
@@ -228,12 +229,6 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return status;
     }
 
-    // From https://ethereum.stackexchange.com/questions/4170/how-to-convert-a-uint-to-bytes-in-solidity/4177#4177
-    function toBytes(uint256 x) internal pure returns (bytes memory b) {
-        b = new bytes(32);
-        assembly { mstore(add(b, 32), x) }
-    }
-
     function checkIntegrityOfAcceptedOffersList(uint requestIdentifier, uint[] memory acceptedOfferIDs) private returns (bool isOffersListValid) {
         for (uint j = 0; j < acceptedOfferIDs.length; j++) {
             if (offers[acceptedOfferIDs[j]].requestID != requestIdentifier) {
@@ -336,31 +331,31 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external payable returns (uint8 status, uint offID) {
         require(
             extra.length >= minimumNumberOfOfferExtraElements && extra.length <= maximumNumberOfOfferExtraElements,
-            stringifyStatusCode(InvalidInput)
+            UtilsLibrary.stringifyStatusCode(InvalidInput)
         );
 
         Offer storage offer = offers[offerID];
 
         require(
             offer.isDefined,
-            stringifyStatusCode(UndefinedID)
+            UtilsLibrary.stringifyStatusCode(UndefinedID)
         );
 
         require(
             offer.offStage == Stage.Pending,
-            stringifyStatusCode(NotPending)
+            UtilsLibrary.stringifyStatusCode(NotPending)
         );
 
         require(
             offer.offerMaker == msg.sender,
-            stringifyStatusCode(AccessDenied)
+            UtilsLibrary.stringifyStatusCode(AccessDenied)
         );
 
         Request storage request = requests[offer.requestID];
 
         require(
             request.reqStage == Stage.Open,
-            stringifyStatusCode(RequestNotOpen)
+            UtilsLibrary.stringifyStatusCode(RequestNotOpen)
         );
 
         RequestExtra storage requestExtra = requestsExtra[request.ID];
@@ -376,7 +371,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
         require(
             _offerSubmissionStatus == Successful,
-            stringifyStatusCode(_offerSubmissionStatus)
+            UtilsLibrary.stringifyStatusCode(_offerSubmissionStatus)
         );
 
         // If the instant rent offer is valid, decide the request with that offer as winning one.
@@ -387,31 +382,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
             require(
                 _requestDecisionStatus == Successful,
-                stringifyStatusCode(_requestDecisionStatus)
+                UtilsLibrary.stringifyStatusCode(_requestDecisionStatus)
             );
         }
         return (Successful, offerID);
-    }
-
-    // From https://github.com/provable-things/ethereum-api/blob/master/oraclizeAPI_0.5.sol#L1045
-    function stringifyStatusCode(uint8 code) private pure returns (string memory) {
-        if (code == 0) {
-            return "0";
-        }
-
-        uint j = code;
-        uint len;
-        while (j > 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint k = len - 1;
-        while (code != 0) {
-            bstr[k--] = byte(uint8(48 + code % 10));
-            code /= 10;
-        }
-        return string(bstr);
     }
 
     function buildOfferExtraFromRawArray(uint[] memory extra) private pure returns (OfferExtra memory offerExtra) {
@@ -433,31 +407,31 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             // The offer must start later than the request
             require(
                 offerExtra.startOfRentTime >= requestExtra.startOfRentTime,
-                stringifyStatusCode(OfferExtraInvalid)
+                UtilsLibrary.stringifyStatusCode(OfferExtraInvalid)
             );
 
             // The offer must finish earlier than the request
             require(
                 offerExtra.startOfRentTime + offerExtra.duration <= requestExtra.startOfRentTime + requestExtra.duration,
-                stringifyStatusCode(OfferExtraInvalid)
+                UtilsLibrary.stringifyStatusCode(OfferExtraInvalid)
             );
 
             if (offerExtra.offerType == OfferType.Auction) {    // If it is an auction bid, the minimum price condition must be satisfied
                 require(
                     requestExtra.auctionMinPricePerSlot * offerExtra.duration <= paymentAmount,
-                    stringifyStatusCode(InsufficientEscrowPayment)
+                    UtilsLibrary.stringifyStatusCode(InsufficientEscrowPayment)
                 );
             } else {    // If instant rent, it must match the pricing rules
                 InstantRentPricingRule[] storage requestRules = requestExtra.rules;
                 require(
                     requestRules.length > 0,                        // Instant rent not supported
-                    stringifyStatusCode(InstantRentNotSupported)
+                    UtilsLibrary.stringifyStatusCode(InstantRentNotSupported)
                 );
 
                 uint minimumPriceToPay = getExpectedInstantRentPriceForOfferDuration(requestRules, offerExtra.duration);
                 require(
                     minimumPriceToPay <= paymentAmount,
-                    stringifyStatusCode(InsufficientEscrowPayment)
+                    UtilsLibrary.stringifyStatusCode(InsufficientEscrowPayment)
                 );
             }
     }
@@ -496,11 +470,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         uint offerDID = offerExtra.offerCreatorDID;
         uint offerCreatorAuthenticationKey = offerExtra.offerCreatorAuthenticationKey;
         byte authKeyPresenceByte = byte(offerCreatorAuthenticationKey == 0 ? 0 : 1);
-        bytes memory offerIDBytes = toBytes(offerID);
-        bytes memory offerDIDBytes = toBytes(offerDID);
+        bytes memory offerIDBytes = UtilsLibrary.toBytes(offerID);
+        bytes memory offerDIDBytes = UtilsLibrary.toBytes(offerDID);
         bytes memory result = abi.encodePacked(authKeyPresenceByte, offerIDBytes, offerDIDBytes);
         if (offerCreatorAuthenticationKey != 0) {
-            bytes memory offerCreatorAuthenticationKeyBytes = toBytes(offerCreatorAuthenticationKey);
+            bytes memory offerCreatorAuthenticationKeyBytes = UtilsLibrary.toBytes(offerCreatorAuthenticationKey);
             result = abi.encodePacked(result, offerCreatorAuthenticationKeyBytes);
         }
         return result;
@@ -566,7 +540,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return;
         }
 
-        uint offerID = abi.decode(slice(data, 0, 32), (uint256));
+        uint offerID = abi.decode(UtilsLibrary.slice(data, 0, 32), (uint256));
         (, bool isOfferDefined) = isOfferDefined(offerID);
 
         // Offer must be defined
@@ -591,85 +565,9 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         PaymentDetails storage payment = pendingPayments[offerID];
         payment.resolved = true;
 
-        bytes memory encryptedToken = slice(data, 32, data.length-32);
+        bytes memory encryptedToken = UtilsLibrary.slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
         emit OfferFulfilled(offerID, encryptedToken);
-    }
-
-    // From: https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol#L227
-    function slice(
-        bytes memory _bytes,
-        uint256 _start,
-        uint256 _length
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        require(_bytes.length >= (_start + _length), "Read out of bounds");
-
-        bytes memory tempBytes;
-
-        assembly {
-            switch iszero(_length)
-            case 0 {
-                // Get a location of some free memory and store it in tempBytes as
-                // Solidity does for memory variables.
-                tempBytes := mload(0x40)
-
-                // The first word of the slice result is potentially a partial
-                // word read from the original array. To read it, we calculate
-                // the length of that partial word and start copying that many
-                // bytes into the array. The first word we copy will start with
-                // data we don't care about, but the last `lengthmod` bytes will
-                // land at the beginning of the contents of the new array. When
-                // we're done copying, we overwrite the full first word with
-                // the actual length of the slice.
-                let lengthmod := and(_length, 31)
-
-                // The multiplication in the next line is necessary
-                // because when slicing multiples of 32 bytes (lengthmod == 0)
-                // the following copy loop was copying the origin's length
-                // and then ending prematurely not copying everything it should.
-                let mc := add(add(tempBytes, lengthmod), mul(0x20, iszero(lengthmod)))
-                let end := add(mc, _length)
-
-                for {
-                    // The multiplication in the next line has the same exact purpose
-                    // as the one above.
-                    let cc := add(add(add(_bytes, lengthmod), mul(0x20, iszero(lengthmod))), _start)
-                } lt(mc, end) {
-                    mc := add(mc, 0x20)
-                    cc := add(cc, 0x20)
-                } {
-                    mstore(mc, mload(cc))
-                }
-
-                mstore(tempBytes, _length)
-
-                //update free-memory pointer
-                //allocating the array padded to 32 bytes like the compiler does now
-                mstore(0x40, and(add(mc, 31), not(31)))
-            }
-            //if we want a zero-length slice let's just return a zero-length array
-            default {
-                tempBytes := mload(0x40)
-
-                mstore(0x40, add(tempBytes, 0x20))
-            }
-        }
-
-        return tempBytes;
-    }
-
-    // Adapted from https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol#L369
-    function toUint256(bytes memory _bytes, uint256 _start) private pure returns (uint256) {
-        require(_bytes.length >= (_start + 32), "Read out of bounds");
-        uint256 tempUint;
-
-        assembly { tempUint := mload(add(add(_bytes, 0x20), _start)) }
-
-        return tempUint;
     }
 
     // Money operations

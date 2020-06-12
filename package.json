@@ -10,7 +10,8 @@
         "build:contracts": "npx typechain --target truffle './build/**/*.json'",
         "build:ts": "npx tsc > /dev/null || true",
         "test:truffle": "npx truffle test",
-        "test": "npm run build:truffle && npm run build:ts; npm run test:truffle",
+        "test:development": "npm run build:truffle && npm run build:ts; npm run test:truffle",
+        "test:marketplace": "npm run build:truffle && npm run build:ts; npm run test:truffle -- --network marketplace",
         "migrate": "npm run build; npx truffle migrate"
     },
     "dependencies": {
