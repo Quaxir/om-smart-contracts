@@ -11,6 +11,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     event Debug(uint value);         // Temporary event, used for debugging purposes
     event Debug2(bytes valueBytes);
     event OfferFulfilled(uint indexed offerID, bytes token);
+    event PaymentCashedOut(uint indexed requestID, uint indexed offerID, uint amount);
 
     enum InterledgerEventType {
         RequestDecision
@@ -48,6 +49,13 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         uint offerCreatorAuthenticationKey;      // OPTIONAL. This key would be used by the receiver of the access token to authenticate him/her self to the smart locker. If no key is provided in the offer, the generated token will be a bearer token.
     }
 
+    struct PaymentDetails {
+        bool created;
+        bool resolved;
+        uint amount;
+        Request request;
+    }
+
     enum OfferType { Auction, InstantRent }
 
 
@@ -60,7 +68,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     mapping (uint => RequestExtra) private requestsExtra;
     mapping (uint => OfferExtra) private offersExtra;
 
-    mapping (uint => bool) private pendingPayments;                     // offerID -> true if the offer is pending
+    mapping (uint => PaymentDetails) private pendingPayments;                     // offerID -> true if the offer is pending
 
 
     constructor() AbstractAuthorisedOwnerManageableMarketPlace() public {
@@ -439,7 +447,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
         validateOfferExtraAndPaymentAgainstRequestExtra(requestExtra, offerExtra, msg.value);
 
-        updateOfferAndRegisterPendingPayment(offerExtra, offerID, msg.value);
+        updateOfferAndRegisterPendingPayment(offerExtra, request, offerID, msg.value);
         offersExtra[offerID] = offerExtra;
         offer.offStage = Stage.Open;
 
@@ -476,7 +484,6 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             len++;
             j /= 10;
         }
-        
         bytes memory bstr = new bytes(len);
         uint k = len - 1;
         while (code != 0) {
@@ -500,7 +507,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function validateOfferExtraAndPaymentAgainstRequestExtra(RequestExtra storage requestExtra, OfferExtra memory offerExtra, uint paymentAmount)
-        private view {
+    private view {
 
             // The offer must start later than the request
             require(
@@ -534,9 +541,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             }
     }
 
-    function updateOfferAndRegisterPendingPayment(OfferExtra memory offerExtra, uint offerID, uint paymentAmount) internal {
+    function updateOfferAndRegisterPendingPayment
+    (OfferExtra memory offerExtra, Request storage request, uint offerID, uint paymentAmount) internal {
         offerExtra.priceOffered = paymentAmount;
-        pendingPayments[offerID] = true;
+
+        pendingPayments[offerID] = PaymentDetails(true, false, paymentAmount, request);
     }
 
     function emitRequestDecisionInterledgerEvent(uint[] memory acceptedOfferIDs) internal {
@@ -610,7 +619,8 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     // Interledger receiver interface support
 
     // Called by IL when an access token has been issued on the authorisation blockchain. Data will contain the offer ID for which the token has been released and the encrypted token.
-    // TODO: hard-coded for now. Metadata length is always 32 bytes (cause it contains offer ID). If metadata content changes, this method will also need to change.
+    // Hard-coded for now. Metadata length is always 32 bytes (cause it contains offer ID). If metadata content changes, this method will also need to change.
+    // TODO: Perhaps interledger should contain all the IDs of the winning offers for a request, so that the remaning offers can be claimed back by the offer makers.
     // TODO: Do something with the received access token as well (not used for now).
     function interledgerReceive(uint256 nonce, bytes memory data) public {
 
@@ -642,7 +652,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return;
         }
 
-        // TODO: Do something, i.e. move money and tokens around, store token somewhere.
+        // Set money that can be claimed by the request creator
+        PaymentDetails storage payment = pendingPayments[offerID];
+        payment.resolved = true;
+
         bytes memory encryptedToken = slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
         emit OfferFulfilled(offerID, encryptedToken);
@@ -722,5 +735,39 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         assembly { tempUint := mload(add(add(_bytes, 0x20), _start)) }
 
         return tempUint;
+    }
+
+    // Money operations
+
+    function withdraw(uint offerID) public returns (uint8 status, uint amount) {
+        PaymentDetails storage paymentDetails = pendingPayments[offerID];
+
+        if (!paymentDetails.created) {
+            emit FunctionStatus(PaymentNotExisting);
+            return (PaymentNotExisting, 0);
+        }
+
+        if (!paymentDetails.resolved) {
+            emit FunctionStatus(PaymentNotResolved);
+            return (PaymentNotResolved, 0);
+        }
+
+        uint requestID = paymentDetails.request.ID;
+
+        Request storage request = requests[requestID];
+        address expectedPaymentReceiver = request.requestMaker;
+
+        if (expectedPaymentReceiver != msg.sender) {
+            emit FunctionStatus(AccessDenied);
+            return (AccessDenied, 0);
+        }
+
+        uint paymentAmount = paymentDetails.amount;
+
+        delete pendingPayments[offerID];
+        msg.sender.transfer(paymentAmount);
+        emit PaymentCashedOut(requestID, offerID, paymentAmount);
+        emit FunctionStatus(Successful);
+        return (Successful, paymentAmount);
     }
 }

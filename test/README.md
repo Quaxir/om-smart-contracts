@@ -35,3 +35,4 @@ Normal method names: not tested.
 *- submitOffer() & isOfferDefined() & getOffer() & getRequestOfferIDs()*
 *- submitOfferArrayExtra() & getOfferExtra()*
 *- interledgerReceive()*
+*- withdraw()*
