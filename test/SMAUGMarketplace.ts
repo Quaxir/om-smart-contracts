@@ -73,80 +73,85 @@ contract("SMAUGMarketPlace", async accounts => {
     //     assert.equal(txStatusCode, 1, "closeRequest() should fail because the caller is not the creator of the request.")        
     // })
     
-    // it("decideRequest & isRequestDecided (AbstractMarketPlace) & getRequestDecision (AbstractMarketPlace)", async () => {
-    //     let owner = accounts[0]
-    //     let requestCreator = accounts[1]
-    //     let offerCreator = accounts[2]
-    //     let contract = await SMAUGMarketPlace.new({from: owner})
+    it("decideRequest & isRequestDecided (AbstractMarketPlace) & getRequestDecision (AbstractMarketPlace)", async () => {
+        let owner = accounts[0]
+        let requestCreator = accounts[1]
+        let offerCreator = accounts[2]
+        let contract = await SMAUGMarketPlace.new({from: owner})
 
-    //     // Valid request decision
+        // Valid request decision
 
-    //     let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-    //     let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
-    //     let requestID = tx.logs[1].args.requestID.toNumber()
-    //     await contract.submitRequestArrayExtra(requestID, [1, 500, 1, 1], {from: requestCreator})
-    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
-    //     let offerID1 = tx.logs[1].args.offerID.toNumber()
-    //     let offer1DID = 1
-    //     let offer1AuthenticationKey = 2
-    //     await contract.submitOfferArrayExtra(offerID1, [2, 5, 0, offer1DID, offer1AuthenticationKey], {from: offerCreator, value: "5"})        // This one also includes the optional authentiction key
-    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
-    //     let offerID2 = tx.logs[1].args.offerID.toNumber()
-    //     let offer2DID = 3
-    //     await contract.submitOfferArrayExtra(offerID2, [2, 5, 0, offer2DID], {from: offerCreator, value: "5"})
-    //     tx = await contract.decideRequest(requestID, [offerID1, offerID2], {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        let requestID = tx.logs[1].args.requestID.toNumber()
+        await contract.submitRequestArrayExtra(requestID, [1, 500, 1, 1], {from: requestCreator})
+        tx = await contract.submitOffer(requestID, {from: offerCreator})
+        let offerID1 = tx.logs[1].args.offerID.toNumber()
+        let offer1DID = 1
+        let offer1AuthenticationKey = 2
+        await contract.submitOfferArrayExtra(offerID1, [2, 5, 0, web3.eth.abi.encodeParameter("uint256", offer1DID), web3.eth.abi.encodeParameter("uint256", offer1AuthenticationKey)], {from: offerCreator, value: "5"})        // This one also includes the optional authentiction key
+        tx = await contract.submitOffer(requestID, {from: offerCreator})
+        let offerID2 = tx.logs[1].args.offerID.toNumber()
+        let offer2DID = 3
+        await contract.submitOfferArrayExtra(offerID2, [2, 5, 0, offer2DID], {from: offerCreator, value: "5"})
+        tx = await contract.decideRequest(requestID, [offerID1, offerID2], {from: requestCreator})
 
-    //     let offer1DecisionInterledgerEventType = tx.logs[3].event
-    //     assert.equal(offer1DecisionInterledgerEventType, "InterledgerEventSending", "decideRequest() did not produce the expected interledger event.")
-    //     let offer1DecisionInterledgerEventID = tx.logs[3].args.id
-    //     assert.equal(0, offer1DecisionInterledgerEventID, "Interledger event ID should have been of value 0.")
-    //     let offer1DecisionInterledgerEventData = web3.utils.hexToBytes(tx.logs[3].args.data)
-    //     assert.equal(offer1DecisionInterledgerEventData.length, 96, "Offer decision interledger event should contain both keys -> a byte array long 64 bytes.")
-    //     let offer1DecisionInterledgerEventOfferID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(0, 32)))
-    //     assert.equal(offer1DecisionInterledgerEventOfferID, offerID1, "Offer decision interledger event returned wrong offer ID.")
-    //     let offer1DecisionInterledgerEventDID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(32, 64)))
-    //     assert.equal(offer1DecisionInterledgerEventDID, offer1DID, "Offer decision interledger event returned wrong DID.")
-    //     let offer1DecisionInterledgerEventAuthenticationKey = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(64, 96)))
-    //     assert.equal(offer1DecisionInterledgerEventAuthenticationKey, offer1AuthenticationKey, "Offer decision interledger event returned wrong authentication key.")
-    //     let offer2DecisionInterledgerEventType = tx.logs[4].event
-    //     assert.equal(offer2DecisionInterledgerEventType, "InterledgerEventSending", "decideRequest() did not produce the expected interledger event.")
-    //     let offer2DecisionInterledgerEventID = tx.logs[4].args.id
-    //     assert.equal(0, offer2DecisionInterledgerEventID, "Interledger event ID should have been of value 0.")
-    //     let offer2DecisionInterledgerEventData = web3.utils.hexToBytes(tx.logs[4].args.data)
-    //     assert.equal(offer2DecisionInterledgerEventData.length, 64, "Offer decision interledger event should contain only DID -> a byte array long 32 bytes.")
-    //     let offer2DecisionInterledgerEventOfferID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer2DecisionInterledgerEventData.slice(0, 32)))
-    //     assert.equal(offer2DecisionInterledgerEventOfferID, offerID2, "Offer decision interledger event returned wrong offer ID.")
-    //     let offer2DecisionInterledgerEventDID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer2DecisionInterledgerEventData.slice(32, 64)))
-    //     assert.equal(offer2DecisionInterledgerEventDID, offer2DID, "Offer decision interledger event returned wrong DID.")
+        let offerDecisionInterledgerEventType = tx.logs[3].event
+        assert.equal(offerDecisionInterledgerEventType, "InterledgerEventSending", "decideRequest() did not produce the expected interledger event.")
+        let offerDecisionInterledgerEventID = tx.logs[3].args.id
+        assert.equal(0, offerDecisionInterledgerEventID, "Interledger event ID should have been of value 0.")
+        let offerDecisionInterledgerEventHexData = tx.logs[3].args.data.substr(2)
+        console.log(offerDecisionInterledgerEventHexData)
+        // let offer1PayloadLength = web3.eth.utils.decodeParameter("uint256", "0x" + offerDecisionInterledgerEventHexData.substr(64))
+        // assert.equal(offer1PayloadLength, 1, "Payload length byte for offer 1
+        //  should be 1, since the offer has an authentication key")
+        // let offer1ID = web3.eth.utils.decodeParameter("uint256", "0x" + offerDecisionInterledgerEventHexData.substr(64))
+        // assert.equal(offer1DecisionInterledgerEventData.length, 96, "Offer decision interledger event should contain both keys -> a byte array long 64 bytes.")
+        // let offer1DecisionInterledgerEventOfferID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(0, 32)))
+        // assert.equal(offer1DecisionInterledgerEventOfferID, offerID1, "Offer decision interledger event returned wrong offer ID.")
+        // let offer1DecisionInterledgerEventDID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(32, 64)))
+        // assert.equal(offer1DecisionInterledgerEventDID, offer1DID, "Offer decision interledger event returned wrong DID.")
+        // let offer1DecisionInterledgerEventAuthenticationKey = web3.utils.hexToNumber(web3.utils.bytesToHex(offer1DecisionInterledgerEventData.slice(64, 96)))
+        // assert.equal(offer1DecisionInterledgerEventAuthenticationKey, offer1AuthenticationKey, "Offer decision interledger event returned wrong authentication key.")
+        // let offer2DecisionInterledgerEventType = tx.logs[4].event
+        // assert.equal(offer2DecisionInterledgerEventType, "InterledgerEventSending", "decideRequest() did not produce the expected interledger event.")
+        // let offer2DecisionInterledgerEventID = tx.logs[4].args.id
+        // assert.equal(0, offer2DecisionInterledgerEventID, "Interledger event ID should have been of value 0.")
+        // let offer2DecisionInterledgerEventData = web3.utils.hexToBytes(tx.logs[4].args.data)
+        // assert.equal(offer2DecisionInterledgerEventData.length, 64, "Offer decision interledger event should contain only DID -> a byte array long 32 bytes.")
+        // let offer2DecisionInterledgerEventOfferID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer2DecisionInterledgerEventData.slice(0, 32)))
+        // assert.equal(offer2DecisionInterledgerEventOfferID, offerID2, "Offer decision interledger event returned wrong offer ID.")
+        // let offer2DecisionInterledgerEventDID = web3.utils.hexToNumber(web3.utils.bytesToHex(offer2DecisionInterledgerEventData.slice(32, 64)))
+        // assert.equal(offer2DecisionInterledgerEventDID, offer2DID, "Offer decision interledger event returned wrong DID.")
 
-    //     let winningOfferIDs = tx.logs[2].args.winningOffersIDs.map(offerID => offerID.toNumber())
-    //     assert.equal(winningOfferIDs.length, 2, "Number of winning offer IDs should be 2.")
-    //     assert.equal(winningOfferIDs[0], offerID1, "The ID of the winning should match the ID of the offer made.")
-    //     let isRequestDecided = (await contract.isRequestDecided(requestID))[1]
-    //     assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
-    //     let requestDecision = await contract.getRequestDecision(requestID)
-    //     winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
-    //     assert.equal(winningOfferIDs.length, 2, "Number of winning offer IDs should be 1.")
-    //     assert.equal(winningOfferIDs[0], offerID1, "The ID of the first winning offer should match the ID of the offer made.")
-    //     assert.equal(winningOfferIDs[1], offerID2, "The ID of the second winning offer should match the ID of the offer made.")
+        // let winningOfferIDs = tx.logs[2].args.winningOffersIDs.map(offerID => offerID.toNumber())
+        // assert.equal(winningOfferIDs.length, 2, "Number of winning offer IDs should be 2.")
+        // assert.equal(winningOfferIDs[0], offerID1, "The ID of the winning should match the ID of the offer made.")
+        // let isRequestDecided = (await contract.isRequestDecided(requestID))[1]
+        // assert.isTrue(isRequestDecided, "Request should be decided after a valid instant rent offer has been submitted.")
+        // let requestDecision = await contract.getRequestDecision(requestID)
+        // winningOfferIDs = requestDecision.acceptedOfferIDs.map(offerID => offerID.toNumber())
+        // assert.equal(winningOfferIDs.length, 2, "Number of winning offer IDs should be 1.")
+        // assert.equal(winningOfferIDs[0], offerID1, "The ID of the first winning offer should match the ID of the offer made.")
+        // assert.equal(winningOfferIDs[1], offerID2, "The ID of the second winning offer should match the ID of the offer made.")
 
-    //     // Undefined request
+        // // Undefined request
 
-    //     tx = await contract.decideRequest(99999, [], {from: requestCreator})
-    //     let txStatusCode = tx.logs[0].args.status.toNumber()
-    //     assert.equal(txStatusCode, 2, "decideRequest() should fail becase request with given ID is not present.")
+        // tx = await contract.decideRequest(99999, [], {from: requestCreator})
+        // let txStatusCode = tx.logs[0].args.status.toNumber()
+        // assert.equal(txStatusCode, 2, "decideRequest() should fail becase request with given ID is not present.")
 
-    //     // Unauthorised user to decide the request
+        // // Unauthorised user to decide the request
 
-    //     let anauthorisedUser = accounts[9]
-    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
-    //     requestID = tx.logs[1].args.requestID.toNumber()
-    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-    //     tx = await contract.decideRequest(requestID, [], {from: anauthorisedUser})
-    //     txStatusCode = tx.logs[0].args.status.toNumber()
-    //     assert.equal(txStatusCode, 1, "decideRequest() should fail becase caller is different than request creator.")
-    // })
+        // let anauthorisedUser = accounts[9]
+        // requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+        // tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        // requestID = tx.logs[1].args.requestID.toNumber()
+        // await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+        // tx = await contract.decideRequest(requestID, [], {from: anauthorisedUser})
+        // txStatusCode = tx.logs[0].args.status.toNumber()
+        // assert.equal(txStatusCode, 1, "decideRequest() should fail becase caller is different than request creator.")
+    })
 
     // it("deleteRequest", async () => {
     //     let owner = accounts[0]
@@ -815,103 +820,103 @@ contract("SMAUGMarketPlace", async accounts => {
     //     assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")
     // })
 
-    it("withdraw()", async  () => {
-        let owner = accounts[0]
-        let requestCreator = accounts[1]
-        let offerCreator1 = accounts[2]
-        let offerCreator2 = accounts[3]
-        let offerCreator3 = accounts[4]
-        let contract = await SMAUGMarketPlace.new({from: owner})
+    // it("withdraw()", async  () => {
+    //     let owner = accounts[0]
+    //     let requestCreator = accounts[1]
+    //     let offerCreator1 = accounts[2]
+    //     let offerCreator2 = accounts[3]
+    //     let offerCreator3 = accounts[4]
+    //     let contract = await SMAUGMarketPlace.new({from: owner})
 
-        // Valid flow
+    //     // Valid flow
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        let requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator1})
-        let offerID1 = tx.logs[1].args.offerID.toNumber()
-        let offerAmount1 = 10
-        let contractAccountBeforeOffer1 = parseInt(await web3.eth.getBalance(contract.address))
-        await contract.submitOfferArrayExtra(offerID1, [1, 1, 0, 1], {from: offerCreator1, value: `${offerAmount1}`})
-        tx = await contract.submitOffer(requestID, {from: offerCreator2})
-        let offerID2 = tx.logs[1].args.offerID.toNumber()
-        let offerAmount2 = 15
-        await contract.submitOfferArrayExtra(offerID2, [1, 1, 0, 1], {from: offerCreator2, value: `${offerAmount2}`})
-        tx = await contract.submitOffer(requestID, {from: offerCreator3})
-        let offerID3 = tx.logs[1].args.offerID.toNumber()
-        let offerAmount3 = 3
-        await contract.submitOfferArrayExtra(offerID3, [1, 1, 0, 1], {from: offerCreator3, value: `${offerAmount3}`})
-        let contractAccountAfterOffer3 = parseInt(await web3.eth.getBalance(contract.address))
-        assert.equal(contractAccountBeforeOffer1+offerAmount1+offerAmount2+offerAmount3, contractAccountAfterOffer3, "Balance of the contract should be the sum of the three offers presented.")
+    //     let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+    //     let requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator1})
+    //     let offerID1 = tx.logs[1].args.offerID.toNumber()
+    //     let offerAmount1 = 10
+    //     let contractAccountBeforeOffer1 = parseInt(await web3.eth.getBalance(contract.address))
+    //     await contract.submitOfferArrayExtra(offerID1, [1, 1, 0, 1], {from: offerCreator1, value: `${offerAmount1}`})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator2})
+    //     let offerID2 = tx.logs[1].args.offerID.toNumber()
+    //     let offerAmount2 = 15
+    //     await contract.submitOfferArrayExtra(offerID2, [1, 1, 0, 1], {from: offerCreator2, value: `${offerAmount2}`})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator3})
+    //     let offerID3 = tx.logs[1].args.offerID.toNumber()
+    //     let offerAmount3 = 3
+    //     await contract.submitOfferArrayExtra(offerID3, [1, 1, 0, 1], {from: offerCreator3, value: `${offerAmount3}`})
+    //     let contractAccountAfterOffer3 = parseInt(await web3.eth.getBalance(contract.address))
+    //     assert.equal(contractAccountBeforeOffer1+offerAmount1+offerAmount2+offerAmount3, contractAccountAfterOffer3, "Balance of the contract should be the sum of the three offers presented.")
 
-        let winningOffers = [offerID1, offerID2]
-        let winningAmounts = [offerAmount1, offerAmount2]
-        await contract.decideRequest(requestID, winningOffers, {from: requestCreator})
+    //     let winningOffers = [offerID1, offerID2]
+    //     let winningAmounts = [offerAmount1, offerAmount2]
+    //     await contract.decideRequest(requestID, winningOffers, {from: requestCreator})
 
-        let givenNonce = 1
-        for (let i = 0; i < winningOffers.length; i++) {
-            let winningOffer = winningOffers[i]
-            let winningAmount = winningAmounts[i]
+    //     let givenNonce = 1
+    //     for (let i = 0; i < winningOffers.length; i++) {
+    //         let winningOffer = winningOffers[i]
+    //         let winningAmount = winningAmounts[i]
 
-            let givenOfferID = "0x" + `${winningOffer}`.padStart(64, "0")
-            await contract.interledgerReceive(givenNonce, givenOfferID, {from: owner})
-            let contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-            tx = await contract.withdraw(winningOffer, {from: requestCreator})
-            let contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-            assert.equal(contractBalanceBeforeWithdrawal, winningAmount+contractBalanceAfterWithdrawal, "Balance of the contract is not consistent with the cash paid out to the request creator.")
-        }
+    //         let givenOfferID = "0x" + `${winningOffer}`.padStart(64, "0")
+    //         await contract.interledgerReceive(givenNonce, givenOfferID, {from: owner})
+    //         let contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //         tx = await contract.withdraw(winningOffer, {from: requestCreator})
+    //         let contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //         assert.equal(contractBalanceBeforeWithdrawal, winningAmount+contractBalanceAfterWithdrawal, "Balance of the contract is not consistent with the cash paid out to the request creator.")
+    //     }
 
-        // Payment not existing (no offerID found)
+    //     // Payment not existing (no offerID found)
 
-        let contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.withdraw(999, {from: requestCreator})
-        let txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 105, "Withdrawal should fail because it refers to an offer that does not exist.")
-        let contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
+    //     let contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     tx = await contract.withdraw(999, {from: requestCreator})
+    //     let txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 105, "Withdrawal should fail because it refers to an offer that does not exist.")
+    //     let contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
 
-        // Payment pending (no officially closed)
+    //     // Payment pending (no officially closed)
 
-        let offerCreator = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        let offerID = tx.logs[1].args.offerID.toNumber()
-        let offerAmount = 10
-        await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: `${offerAmount}`})
-        await contract.decideRequest(requestID, [offerID], {from: requestCreator})
+    //     let offerCreator = accounts[9]
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     let offerID = tx.logs[1].args.offerID.toNumber()
+    //     let offerAmount = 10
+    //     await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: `${offerAmount}`})
+    //     await contract.decideRequest(requestID, [offerID], {from: requestCreator})
 
-        contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.withdraw(offerID, {from: requestCreator})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 106, "Withdrawal should fail because it refers to an offer that has not been resolved yet.")
-        contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
+    //     contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     tx = await contract.withdraw(offerID, {from: requestCreator})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 106, "Withdrawal should fail because it refers to an offer that has not been resolved yet.")
+    //     contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
 
-        // Payment claimed by a person different than the request creator
+    //     // Payment claimed by a person different than the request creator
 
-        let unauthorisedUser = accounts[5]
-        offerCreator = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
-        requestID = tx.logs[1].args.requestID.toNumber()
-        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
-        tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.offerID.toNumber()
-        offerAmount = 10
-        await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: `${offerAmount}`})
-        await contract.decideRequest(requestID, [offerID], {from: requestCreator})
-        let encodedOfferID = "0x" + `${offerID}`.padStart(64, "0")
-        await contract.interledgerReceive("123", encodedOfferID, {from: owner})
+    //     let unauthorisedUser = accounts[5]
+    //     offerCreator = accounts[9]
+    //     requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+    //     tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+    //     requestID = tx.logs[1].args.requestID.toNumber()
+    //     await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+    //     tx = await contract.submitOffer(requestID, {from: offerCreator})
+    //     offerID = tx.logs[1].args.offerID.toNumber()
+    //     offerAmount = 10
+    //     await contract.submitOfferArrayExtra(offerID, [1, 1, 0, 1], {from: offerCreator, value: `${offerAmount}`})
+    //     await contract.decideRequest(requestID, [offerID], {from: requestCreator})
+    //     let encodedOfferID = "0x" + `${offerID}`.padStart(64, "0")
+    //     await contract.interledgerReceive("123", encodedOfferID, {from: owner})
 
-        contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.withdraw(offerID, {from: unauthorisedUser})
-        txStatusCode = tx.logs[0].args.status.toNumber()
-        assert.equal(txStatusCode, 1, "Withdrawal should fail because the requester is not the request creator.")
-        contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
-        assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
-    })
+    //     contractBalanceBeforeWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     tx = await contract.withdraw(offerID, {from: unauthorisedUser})
+    //     txStatusCode = tx.logs[0].args.status.toNumber()
+    //     assert.equal(txStatusCode, 1, "Withdrawal should fail because the requester is not the request creator.")
+    //     contractBalanceAfterWithdrawal = parseInt(await web3.eth.getBalance(contract.address))
+    //     assert.equal(contractBalanceBeforeWithdrawal, contractBalanceAfterWithdrawal, "Account balance for marketplace should be the same as before the failed withdrawal.")
+    // })
 })

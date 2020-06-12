@@ -234,85 +234,6 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         assembly { mstore(add(b, 32), x) }
     }
 
-    // From https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol#L12
-    function concat(
-        bytes memory _preBytes,
-        bytes memory _postBytes
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory tempBytes;
-
-        assembly {
-            // Get a location of some free memory and store it in tempBytes as
-            // Solidity does for memory variables.
-            tempBytes := mload(0x40)
-
-            // Store the length of the first bytes array at the beginning of
-            // the memory for tempBytes.
-            let length := mload(_preBytes)
-            mstore(tempBytes, length)
-
-            // Maintain a memory counter for the current write location in the
-            // temp bytes array by adding the 32 bytes for the array length to
-            // the starting location.
-            let mc := add(tempBytes, 0x20)
-            // Stop copying when the memory counter reaches the length of the
-            // first bytes array.
-            let end := add(mc, length)
-
-            for {
-                // Initialize a copy counter to the start of the _preBytes data,
-                // 32 bytes into its memory.
-                let cc := add(_preBytes, 0x20)
-            } lt(mc, end) {
-                // Increase both counters by 32 bytes each iteration.
-                mc := add(mc, 0x20)
-                cc := add(cc, 0x20)
-            } {
-                // Write the _preBytes data into the tempBytes memory 32 bytes
-                // at a time.
-                mstore(mc, mload(cc))
-            }
-
-            // Add the length of _postBytes to the current length of tempBytes
-            // and store it as the new length in the first 32 bytes of the
-            // tempBytes memory.
-            length := mload(_postBytes)
-            mstore(tempBytes, add(length, mload(tempBytes)))
-
-            // Move the memory counter back from a multiple of 0x20 to the
-            // actual end of the _preBytes data.
-            mc := end
-            // Stop copying when the memory counter reaches the new combined
-            // length of the arrays.
-            end := add(mc, length)
-
-            for {
-                let cc := add(_postBytes, 0x20)
-            } lt(mc, end) {
-                mc := add(mc, 0x20)
-                cc := add(cc, 0x20)
-            } {
-                mstore(mc, mload(cc))
-            }
-
-            // Update the free-memory pointer by padding our last write location
-            // to 32 bytes: add 31 bytes to the end of tempBytes to move to the
-            // next 32 byte block, then round down to the nearest multiple of
-            // 32. If the sum of the length of the two arrays is zero then add
-            // one before rounding down to leave a blank 32 bytes (the length block with 0).
-            mstore(0x40, and(
-              add(add(end, iszero(add(length, mload(_preBytes)))), 31),
-              not(31) // Round down to the nearest 32 bytes.
-            ))
-        }
-
-        return tempBytes;
-    }
-
     function checkIntegrityOfAcceptedOffersList(uint requestIdentifier, uint[] memory acceptedOfferIDs) private returns (bool isOffersListValid) {
         for (uint j = 0; j < acceptedOfferIDs.length; j++) {
             if (offers[acceptedOfferIDs[j]].requestID != requestIdentifier) {
@@ -549,24 +470,38 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function emitRequestDecisionInterledgerEvent(uint[] memory acceptedOfferIDs) internal {
+        bytes memory payload = new bytes(0);
+
         for (uint i = 0; i < acceptedOfferIDs.length; i++) {
             uint acceptedOfferID = acceptedOfferIDs[i];
             OfferExtra storage offerExtra = offersExtra[acceptedOfferID];
             bytes memory interledgerEventPayload = getInterledgerPayloadFromOfferExtra(acceptedOfferID, offerExtra);
-            emit InterledgerEventSending(uint256(InterledgerEventType.RequestDecision), interledgerEventPayload);
+            payload = abi.encodePacked(payload, interledgerEventPayload);
         }
+        emit InterledgerEventSending(uint256(InterledgerEventType.RequestDecision), payload);
     }
 
-    // Returns either the concatenation of offer ID and winner DID (length = 64 hex chars), or the concatenation of offer ID, winner DID and winner authentication key (length = 96 hex chars).
+    /*
+    Returns either the concatenation of all the offer IDs winner DIDs, and winner authKey, if present.
+    Each entry in the list has the following format:
+        x + offerID + offerDID [+ offerAuthKey]
+            byte x = 1 if offerAuthKey is not null, 0 otherwise
+            bytes offerID = the value of the offer ID
+            bytes offerDID = the value of the offer creator DID (max 32)
+            bytes offerAuthKey = the value of the offer creator auth key (OPTIONAL, max 32)
+    DIDs and authKey are max 32 bytes because given as array extra parameters which allow for uint256 values max. Might be worth creating another way of passing data via bytes.
+    So, each entry in the list is long either 33 or 65 bytes, depending on the value of the first byte (33 if first byte is 0, 65 if 1).
+    */
     function getInterledgerPayloadFromOfferExtra(uint offerID, OfferExtra storage offerExtra) private view returns (bytes memory) {
         uint offerDID = offerExtra.offerCreatorDID;
         uint offerCreatorAuthenticationKey = offerExtra.offerCreatorAuthenticationKey;
+        byte authKeyPresenceByte = byte(offerCreatorAuthenticationKey == 0 ? 0 : 1);
         bytes memory offerIDBytes = toBytes(offerID);
         bytes memory offerDIDBytes = toBytes(offerDID);
-        bytes memory result = concat(offerIDBytes, offerDIDBytes);
+        bytes memory result = abi.encodePacked(authKeyPresenceByte, offerIDBytes, offerDIDBytes);
         if (offerCreatorAuthenticationKey != 0) {
             bytes memory offerCreatorAuthenticationKeyBytes = toBytes(offerCreatorAuthenticationKey);
-            result = concat(result, offerCreatorAuthenticationKeyBytes);
+            result = abi.encodePacked(result, offerCreatorAuthenticationKeyBytes);
         }
         return result;
     }
