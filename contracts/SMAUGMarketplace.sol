@@ -456,7 +456,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     /*
-    Returns either the concatenation of all the offer IDs winner DIDs, and winner authKey, if present.
+    Returns the concatenation of all the offer IDs winner DIDs, and winner authKey, if present.
     Each entry in the list has the following format:
         x + offerID + offerDID [+ offerAuthKey]
             byte x = 1 if offerAuthKey is not null, 0 otherwise
