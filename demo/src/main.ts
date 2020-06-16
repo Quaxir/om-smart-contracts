@@ -254,7 +254,7 @@ async function handleOfferCreation(): Promise<void> {
     // Create offer extra
     let offerType = 0           // Offer is an auction one (no instant rent)
     let offerExtra = [offerDetails.offerStartingTime, offerDetails.offerDuration, offerType, Web3.utils.toHex(offerDetails.creatorDID), Web3.utils.toHex(offerDetails.creatorAuthKey)]
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 100000000, value: `${offerDetails.offerPrice}`})
+    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: `${offerDetails.offerPrice}`})
     txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         console.error(`Offer creation failed with status ${txStatus}`)
@@ -470,7 +470,7 @@ async function createAndDecideTestRequest() {
     }
     let offer1ID = offer1TransactionResult.events!.OfferAdded.returnValues.offerID as number
     try {
-        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer1ID, offer1Extra).send({from: offerer1Creator, gas: 100000000, value: "5"})
+        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer1ID, offer1Extra).send({from: offerer1Creator, gas: 1000000, value: "5"})
     } catch (e) {
         console.error(`submitOfferArrayExtra failed with error ${e}`)
         return
@@ -487,7 +487,7 @@ async function createAndDecideTestRequest() {
     }
     let offer2ID = offer2TransactionResult.events!.OfferAdded.returnValues.offerID as number
     try {
-        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer2ID, offer2Extra).send({from: offerer2Creator, gas: 100000000, value: "5"})
+        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer2ID, offer2Extra).send({from: offerer2Creator, gas: 1000000, value: "5"})
     } catch (e) {
         console.error(`submitOfferArrayExtra failed with error ${e}`)
         return
