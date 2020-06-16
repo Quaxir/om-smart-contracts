@@ -53,8 +53,13 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     struct PaymentDetails {
         bool created;
         bool resolved;
+        bool toReturn;
         uint amount;
-        Request request;
+    }
+
+    struct InterledgerPayloadElement {
+        uint offerID;
+        bytes encryptedToken;
     }
 
     enum OfferType { Auction, InstantRent }
@@ -69,7 +74,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     mapping (uint => RequestExtra) private requestsExtra;
     mapping (uint => OfferExtra) private offersExtra;
 
-    mapping (uint => PaymentDetails) private pendingPayments;                     // offerID -> true if the offer is pending
+    // requestID -> [offerID]. Keeps track of the requests that have been decided but not fulfilled (no token issued)
+    mapping(uint => uint[]) private openOffersPerRequest;
+
+    mapping (uint => PaymentDetails) private pendingPayments;                     // offerID -> details for an offer
 
 
     constructor() AbstractAuthorisedOwnerManageableMarketPlace() public {
@@ -385,6 +393,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
                 UtilsLibrary.stringifyStatusCode(_requestDecisionStatus)
             );
         }
+        openOffersPerRequest[request.ID].push(offerID);
         return (Successful, offerID);
     }
 
@@ -440,7 +449,8 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     (OfferExtra memory offerExtra, Request storage request, uint offerID, uint paymentAmount) internal {
         offerExtra.priceOffered = paymentAmount;
 
-        pendingPayments[offerID] = PaymentDetails(true, false, paymentAmount, request);
+        // By default toReturn = true. Set to false if an access token is issued.
+        pendingPayments[offerID] = PaymentDetails(true, false, true, paymentAmount);
     }
 
     function emitRequestDecisionInterledgerEvent(uint[] memory acceptedOfferIDs) internal {
@@ -527,47 +537,126 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     // Interledger receiver interface support
 
-    // Called by IL when an access token has been issued on the authorisation blockchain. Data will contain the offer ID for which the token has been released and the encrypted token.
-    // Hard-coded for now. Metadata length is always 32 bytes (cause it contains offer ID). If metadata content changes, this method will also need to change.
-    // TODO: Perhaps interledger should contain all the IDs of the winning offers for a request, so that the remaning offers can be claimed back by the offer makers.
-    // TODO: Do something with the received access token as well (not used for now).
+    /*
+        Called by IL when an access token has been issued on the authorisation blockchain. Data will contain the offer ID for which the token has been released and the encrypted token.
+        Payload will have the following structure:
+            - [(32 bytes for metadata length, n bytes for metadata, 32 bytes for encrypted token length, m bytes for encrypted token)]. Repeated for each token.
+        TODO: 32 bytes for lengths is wasted space, probably 2 bytes would be enough.
+        TODO: Do something with the received access token as well (not used for now).
+    */
     function interledgerReceive(uint256 nonce, bytes memory data) public {
 
         // Only IL under a manager's account can call this function
         if(!(msg.sender == owner() || isManager(msg.sender))) {
-            emit FunctionStatus(AccessDenied);
             emit InterledgerEventRejected(nonce);
             return;
         }
 
-        uint offerID = abi.decode(UtilsLibrary.slice(data, 0, 32), (uint256));
-        (, bool isOfferDefined) = isOfferDefined(offerID);
-
-        // Offer must be defined
-        if (!isOfferDefined) {
-            emit FunctionStatus(UndefinedID);
+        // Empty payloads are not accepted
+        if (data.length == 0) {
             emit InterledgerEventRejected(nonce);
             return;
         }
 
-        Offer storage offer = offers[offerID];
-        uint requestID = requests[offer.requestID].ID;
+        // TODO: Validate the payload for each single request being built (i.e., data not in the expected form). 1/3
+        // In case the payload has an incorrect structure, decodeInterledgerPayload will probably revert. 2/3
+        // We want to avoid that and instead just discard the interledger event. 3/3
+        InterledgerPayloadElement[] memory offersFulfilled = decodeInterledgerPayload(data);
+        uint8 validationStatus = validateOffersInInterledgerPayload(offersFulfilled);
+
+        if (validationStatus != Successful) {
+            emit FunctionStatus(validationStatus);
+            emit InterledgerEventRejected(nonce);
+            return;
+        }
+
+        Offer storage referenceOffer = offers[offersFulfilled[0].offerID];
+        Request storage referenceRequest = requests[referenceOffer.requestID];  // All offers will refer to the same request
+
+        uint requestID = referenceRequest.ID;
         (, bool isRequestDecided) = isRequestDecided(requestID);
 
         // Request must be decided
         if (!isRequestDecided) {
-            emit FunctionStatus(ReqNotDecided);
             emit InterledgerEventRejected(nonce);
             return;
         }
 
         // Set money that can be claimed by the request creator
-        PaymentDetails storage payment = pendingPayments[offerID];
+        PaymentDetails storage payment = pendingPayments[referenceOffer.ID];
         payment.resolved = true;
 
         bytes memory encryptedToken = UtilsLibrary.slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
-        emit OfferFulfilled(offerID, encryptedToken);
+        emit OfferFulfilled(referenceOffer.ID, encryptedToken);
+    }
+
+    function decodeInterledgerPayload(bytes memory payload) private pure returns (InterledgerPayloadElement[] memory) {
+        uint index = 0;
+        uint resultLength = 0;
+
+        // Calculates how long the resulting array will be (no dynamic arrays allowed in-memory)
+        while (index < payload.length) {
+            uint metadataLength = abi.decode(UtilsLibrary.slice(payload, index, 32), (uint256));
+            index += 32 + metadataLength;
+            uint tokenLength = abi.decode(UtilsLibrary.slice(payload, index, 32), (uint256));
+            index += 32 + tokenLength;
+            resultLength += 1;
+        }
+
+        InterledgerPayloadElement[] memory result = new InterledgerPayloadElement[](resultLength);
+
+        // Re-execute the same looping operation, and populate the result array
+        index = 0;
+        uint resultIndex = 0;
+        while (index < payload.length) {
+            uint metadataLength = abi.decode(UtilsLibrary.slice(payload, index, 32), (uint256));
+            index += 32;
+            uint offerID = abi.decode(UtilsLibrary.slice(payload, index, metadataLength), (uint256));
+            index += metadataLength;
+            uint tokenLength = abi.decode(UtilsLibrary.slice(payload, index, 32), (uint256));
+            index += 32;
+            bytes memory token = UtilsLibrary.slice(payload, index, tokenLength);
+            index += tokenLength;
+            result[resultIndex] = InterledgerPayloadElement(offerID, token);
+            resultIndex += 1;
+        }
+
+        return result;
+    }
+
+    function validateOffersInInterledgerPayload(InterledgerPayloadElement[] memory offersFulfilled) private view returns (uint8) {
+        // All offers must be defined and refer to the same request
+        for (uint i = 0; i < offersFulfilled.length; i++) {
+            (, bool isOfferDefined) = isOfferDefined(offersFulfilled[i].offerID);
+            if (!isOfferDefined) {
+                return UndefinedID;
+            }
+            if (i > 0) {
+                if (offers[offersFulfilled[i-1].offerID].requestID != offers[offersFulfilled[i].offerID].requestID) {
+                    return ImproperList;
+                }
+            }
+        }
+        return Successful;
+    }
+
+    // Notifies the losing offer creators and the request creator that the money can be claimed.
+    function resolveRequest(Request storage request, InterledgerPayloadElement[] memory offersFulfilled) private {
+        uint[] storage openOffers = openOffersPerRequest[request.ID];
+        for (uint offerFulfilledIndex = 0; offerFulfilledIndex < offersFulfilled.length; offerFulfilledIndex++) {
+            uint offerFulfilledID = offersFulfilled[offerFulfilledIndex].offerID;
+            for (uint openOfferIndex = 0; openOfferIndex < openOffers.length; openOfferIndex++) {
+                if (openOffers[openOfferIndex] == offerFulfilledID) {     // The offer is a winning one
+                    pendingPayments[offerFulfilledID].toReturn = false;
+                    break;
+                }
+            }
+            pendingPayments[offerFulfilledID].resolved = true;
+            // Notify that the offer money can be claimed back (either from offer creator if toReturn == true, or request creator if toReturn == false)
+            emit OfferFulfilled(offerFulfilledID, offersFulfilled[offerFulfilledIndex].encryptedToken);
+        }
+        delete openOffersPerRequest[request.ID];
     }
 
     // Money operations
@@ -585,21 +674,27 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return (PaymentNotResolved, 0);
         }
 
-        uint requestID = paymentDetails.request.ID;
+        Offer storage offer = offers[offerID];
 
-        Request storage request = requests[requestID];
-        address expectedPaymentReceiver = request.requestMaker;
-
-        if (expectedPaymentReceiver != msg.sender) {
-            emit FunctionStatus(AccessDenied);
-            return (AccessDenied, 0);
+        // Only offer creator can claim money
+        if (paymentDetails.toReturn) {
+            if (msg.sender != offer.offerMaker) {
+                emit FunctionStatus(AccessDenied);
+                return (AccessDenied, 0);
+            }
+        } else {    // Only request creator can claim money
+            Request storage request = requests[offer.requestID];
+            if (msg.sender != request.requestMaker) {
+                emit FunctionStatus(AccessDenied);
+                return (AccessDenied, 0);
+            }
         }
 
         uint paymentAmount = paymentDetails.amount;
 
         delete pendingPayments[offerID];
         msg.sender.transfer(paymentAmount);
-        emit PaymentCashedOut(requestID, offerID, paymentAmount);
+        emit PaymentCashedOut(offer.requestID, offerID, paymentAmount);
         emit FunctionStatus(Successful);
         return (Successful, paymentAmount);
     }
