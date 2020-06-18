@@ -371,7 +371,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
         validateOfferExtraAndPaymentAgainstRequestExtra(requestExtra, offerExtra, msg.value);
 
-        updateOfferAndRegisterPendingPayment(offerExtra, request, offerID, msg.value);
+        updateOfferAndRegisterPendingPayment(offerExtra, offerID, msg.value);
         offersExtra[offerID] = offerExtra;
         offer.offStage = Stage.Open;
 
@@ -446,7 +446,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function updateOfferAndRegisterPendingPayment
-    (OfferExtra memory offerExtra, Request storage request, uint offerID, uint paymentAmount) internal {
+    (OfferExtra memory offerExtra, uint offerID, uint paymentAmount) internal {
         offerExtra.priceOffered = paymentAmount;
 
         // By default toReturn = true. Set to false if an access token is issued.
@@ -562,10 +562,9 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         // In case the payload has an incorrect structure, decodeInterledgerPayload will probably revert. 2/3
         // We want to avoid that and instead just discard the interledger event. 3/3
         InterledgerPayloadElement[] memory offersFulfilled = decodeInterledgerPayload(data);
-        uint8 validationStatus = validateOffersInInterledgerPayload(offersFulfilled);
+        bool isOffersArrayValid = validateOffersInInterledgerPayload(offersFulfilled);
 
-        if (validationStatus != Successful) {
-            emit FunctionStatus(validationStatus);
+        if (!isOffersArrayValid) {
             emit InterledgerEventRejected(nonce);
             return;
         }
@@ -582,13 +581,9 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return;
         }
 
-        // Set money that can be claimed by the request creator
-        PaymentDetails storage payment = pendingPayments[referenceOffer.ID];
-        payment.resolved = true;
-
-        bytes memory encryptedToken = UtilsLibrary.slice(data, 32, data.length-32);
         emit InterledgerEventAccepted(nonce);
-        emit OfferFulfilled(referenceOffer.ID, encryptedToken);
+        // Set that money can be claimed by the request creator or offer creator
+        resolveRequest(referenceRequest, offersFulfilled);
     }
 
     function decodeInterledgerPayload(bytes memory payload) private pure returns (InterledgerPayloadElement[] memory) {
@@ -625,20 +620,20 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return result;
     }
 
-    function validateOffersInInterledgerPayload(InterledgerPayloadElement[] memory offersFulfilled) private view returns (uint8) {
+    function validateOffersInInterledgerPayload(InterledgerPayloadElement[] memory offersFulfilled) private view returns (bool) {
         // All offers must be defined and refer to the same request
         for (uint i = 0; i < offersFulfilled.length; i++) {
             (, bool isOfferDefined) = isOfferDefined(offersFulfilled[i].offerID);
             if (!isOfferDefined) {
-                return UndefinedID;
+                return false;
             }
             if (i > 0) {
                 if (offers[offersFulfilled[i-1].offerID].requestID != offers[offersFulfilled[i].offerID].requestID) {
-                    return ImproperList;
+                    return false;
                 }
             }
         }
-        return Successful;
+        return true;
     }
 
     // Notifies the losing offer creators and the request creator that the money can be claimed.
