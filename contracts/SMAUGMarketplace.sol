@@ -11,7 +11,9 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     event Debug(uint value);         // Temporary event, used for debugging purposes
     event Debug2(bytes valueBytes);
+    event OfferClaimable(uint indexed offerID);
     event OfferFulfilled(uint indexed offerID, bytes token);
+    event RequestClaimable(uint indexed requestID, uint[] offerIDs);
     event PaymentCashedOut(uint indexed requestID, uint indexed offerID, uint amount);
 
     enum InterledgerEventType {
@@ -636,22 +638,36 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return true;
     }
 
-    // Notifies the losing offer creators and the request creator that the money can be claimed.
+    /*
+        Notifies the losing offer creators and the request creator that the money can be claimed.
+        Generates the following events:
+        - one OfferFulfilled(offerID, token) event for each offer that has been fulfilled
+        - one OfferClaimable(offerID) event for each offer that has not been selected as winning
+        - one RequestClaimable(requestID, offerIDs) at the end
+    */
     function resolveRequest(Request storage request, InterledgerPayloadElement[] memory offersFulfilled) private {
         uint[] storage openOffers = openOffersPerRequest[request.ID];
-        for (uint offerFulfilledIndex = 0; offerFulfilledIndex < offersFulfilled.length; offerFulfilledIndex++) {
-            uint offerFulfilledID = offersFulfilled[offerFulfilledIndex].offerID;
-            for (uint openOfferIndex = 0; openOfferIndex < openOffers.length; openOfferIndex++) {
-                if (openOffers[openOfferIndex] == offerFulfilledID) {     // The offer is a winning one
-                    pendingPayments[offerFulfilledID].toReturn = false;
+        uint[] memory fulfilledOfferIDs = new uint[](offersFulfilled.length);
+        for (uint openOfferIndex = 0; openOfferIndex < openOffers.length; openOfferIndex++) {
+            uint openOfferID = openOffers[openOfferIndex];
+            pendingPayments[openOfferID].resolved = true;
+            for (uint offerFulfilledIndex = 0; offerFulfilledIndex < offersFulfilled.length; offerFulfilledIndex++) {
+                uint offerFulfilledID = offersFulfilled[offerFulfilledIndex].offerID;
+                if (openOfferID == offerFulfilledID) {     // The offer is a winning one
+                    pendingPayments[openOfferID].toReturn = false;
+                    fulfilledOfferIDs[offerFulfilledIndex] = offerFulfilledID;
+                    // Notify that the offer money can be claimed back
+                    emit OfferFulfilled(openOfferID, offersFulfilled[offerFulfilledIndex].encryptedToken);
                     break;
                 }
             }
-            pendingPayments[offerFulfilledID].resolved = true;
-            // Notify that the offer money can be claimed back (either from offer creator if toReturn == true, or request creator if toReturn == false)
-            emit OfferFulfilled(offerFulfilledID, offersFulfilled[offerFulfilledIndex].encryptedToken);
+            // If the open offer is not among the winning ones, notify the offer creator
+            if (pendingPayments[openOfferID].toReturn) {
+                emit OfferClaimable(openOfferID);
+            }
         }
         delete openOffersPerRequest[request.ID];
+        emit RequestClaimable(request.ID, fulfilledOfferIDs);
     }
 
     // Money operations
