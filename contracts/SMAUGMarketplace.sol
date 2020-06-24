@@ -48,7 +48,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         uint duration;                      // The n. of minutes from startOfRentTime the rent would last.
         OfferType offerType;                // Specifies whether the money offered is for an auction or an instant buy offer.
         uint priceOffered;                     // The amount of Ethers that the offer contained.
-        uint offerCreatorDID;                    // The DID to decrypt the issued access token, in case the offer is selected.
+        uint offerCreatorEncryptionKey;         // The key to decrypt the issued access token, in case the offer is selected.
         uint offerCreatorAuthenticationKey;      // OPTIONAL. This key would be used by the receiver of the access token to authenticate him/her self to the smart locker. If no key is provided in the offer, the generated token will be a bearer token.
     }
 
@@ -404,7 +404,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         _offerExtra.startOfRentTime = extra[0];
         _offerExtra.duration = extra[1];
         _offerExtra.offerType = OfferType(extra[2]);
-        _offerExtra.offerCreatorDID = extra[3];
+        _offerExtra.offerCreatorEncryptionKey = extra[3];
         if (extra.length == 5) {
             _offerExtra.offerCreatorAuthenticationKey = extra[4];
         }
@@ -479,7 +479,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     So, each entry in the list is long either 33 or 65 bytes, depending on the value of the first byte (33 if first byte is 0, 65 if 1).
     */
     function getInterledgerPayloadFromOfferExtra(uint offerID, OfferExtra storage offerExtra) private view returns (bytes memory) {
-        uint offerDID = offerExtra.offerCreatorDID;
+        uint offerDID = offerExtra.offerCreatorEncryptionKey;
         uint offerCreatorAuthenticationKey = offerExtra.offerCreatorAuthenticationKey;
         byte authKeyPresenceByte = byte(offerCreatorAuthenticationKey == 0 ? 0 : 1);
         bytes memory offerIDBytes = UtilsLibrary.toBytes(offerID);
@@ -505,7 +505,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     function getOfferExtra(uint offerIdentifier)
-    public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint priceOffered, uint offerCreatorDID, uint offerCreatorAuthenticationKey) {
+    public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint priceOffered, uint offerCreatorEncryptionKey, uint offerCreatorAuthenticationKey) {
         Offer storage offer = offers[offerIdentifier];
 
         if(!offer.isDefined) {
@@ -520,7 +520,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             offerExtra.duration,
             offerExtra.offerType,
             offerExtra.priceOffered,
-            offerExtra.offerCreatorDID,
+            offerExtra.offerCreatorEncryptionKey,
             offerExtra.offerCreatorAuthenticationKey
         );
     }

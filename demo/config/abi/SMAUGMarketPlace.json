@@ -118,6 +118,19 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "offerID",
+        "type": "uint256"
+      }
+    ],
+    "name": "OfferClaimable",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "uint256",
         "name": "offerID",
@@ -207,6 +220,25 @@
       }
     ],
     "name": "RequestAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestID",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256[]",
+        "name": "offerIDs",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "RequestClaimable",
     "type": "event"
   },
   {
@@ -937,7 +969,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "offerCreatorDID",
+        "name": "offerCreatorEncryptionKey",
         "type": "uint256"
       },
       {

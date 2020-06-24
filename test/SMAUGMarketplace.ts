@@ -364,9 +364,9 @@ contract("SMAUGMarketPlace", async accounts => {
         tx = await contract.submitOffer(requestID, {from: offerCreator})
         let offerID = tx.logs[1].args.requestID.toNumber()
         let offerWei = requestDuration * requestMinAuctionPrice
-        let inputOfferCreatorDID = web3.utils.stringToHex("2wJPyULfLLnYTEFYzByfUR")
+        let inputOfferCreatorEncryptionKey = web3.utils.stringToHex("2wJPyULfLLnYTEFYzByfUR")
         let contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorDID)], {from: offerCreator, value: `${offerWei}`})
+        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorEncryptionKey)], {from: offerCreator, value: `${offerWei}`})
         let txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         let contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -375,13 +375,13 @@ contract("SMAUGMarketPlace", async accounts => {
         let offerStartingTime = offerExtraDetails.startOfRentTime
         let offerType = offerExtraDetails.offerType
         let offerWeiRegistered = offerExtraDetails.priceOffered.toNumber()
-        let offerCreatorDID = offerExtraDetails.offerCreatorDID
+        let offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         let offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
         assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
         assert.equal(offerType, 0, "Wrong offerType returned.")
         assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+        assert.equal(web3.utils.toHex(offerCreatorEncryptionKey), inputOfferCreatorEncryptionKey, "Wrong offerCreatorEncryptionKey returned")
         assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), "0x0", "Wrong offerCreatorAuthenticationKey returned")
         assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
@@ -399,7 +399,7 @@ contract("SMAUGMarketPlace", async accounts => {
         offerWei = requestDuration * requestMinAuctionPrice
         let inputAuthenticationKey = "0xa5b9d60f32436310afebcfda832817a68921beb782fabf7915cc0460b443116a"
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorDID), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
+        tx = await contract.submitOfferArrayExtra(offerID, [requestStartingTime, requestDuration, 0, web3.utils.toBN(inputOfferCreatorEncryptionKey), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -408,13 +408,13 @@ contract("SMAUGMarketPlace", async accounts => {
         offerStartingTime = offerExtraDetails.startOfRentTime
         offerType = offerExtraDetails.offerType
         offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
+        offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
         assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
         assert.equal(offerType, 0, "Wrong offerType returned.")
         assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+        assert.equal(web3.utils.toHex(offerCreatorEncryptionKey), inputOfferCreatorEncryptionKey, "Wrong offerCreatorEncryptionKey returned")
         assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), inputAuthenticationKey, "Wrong offerCreatorAuthenticationKey returned")
         assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
@@ -428,7 +428,7 @@ contract("SMAUGMarketPlace", async accounts => {
         offerID = tx.logs[1].args.requestID.toNumber()
         offerWei = requestDuration * 1
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorDID)], {from: offerCreator, value: `${offerWei}`})
+        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorEncryptionKey)], {from: offerCreator, value: `${offerWei}`})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -446,13 +446,13 @@ contract("SMAUGMarketPlace", async accounts => {
         offerStartingTime = offerExtraDetails.startOfRentTime
         offerType = offerExtraDetails.offerType
         offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
+        offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
         assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
         assert.equal(offerType, 1, "Wrong offerType returned.")
         assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+        assert.equal(web3.utils.toHex(offerCreatorEncryptionKey), inputOfferCreatorEncryptionKey, "Wrong offerCreatorEncryptionKey returned")
         assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), "0x0", "Wrong offerCreatorAuthenticationKey returned")
         assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
@@ -466,7 +466,7 @@ contract("SMAUGMarketPlace", async accounts => {
         offerID = tx.logs[1].args.requestID.toNumber()
         offerWei = requestDuration * 1
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
-        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorDID), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
+        tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorEncryptionKey), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -484,13 +484,13 @@ contract("SMAUGMarketPlace", async accounts => {
         offerStartingTime = offerExtraDetails.startOfRentTime
         offerType = offerExtraDetails.offerType
         offerWeiRegistered = offerExtraDetails.priceOffered
-        offerCreatorDID = offerExtraDetails.offerCreatorDID
+        offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
         assert.equal(offerStartingTime, requestStartingTime, "Wrong offerStartingTime returned.")
         assert.equal(offerType, 1, "Wrong offerType returned.")
         assert.equal(offerWei, offerWeiRegistered, "Wrong value saved in the offer extra for the price paid.")
-        assert.equal(web3.utils.toHex(offerCreatorDID), inputOfferCreatorDID, "Wrong offerCreatorDID returned")
+        assert.equal(web3.utils.toHex(offerCreatorEncryptionKey), inputOfferCreatorEncryptionKey, "Wrong offerCreatorEncryptionKey returned")
         assert.equal(web3.utils.toHex(offerCreatorAuthenticationKey), inputAuthenticationKey, "Wrong offerCreatorAuthenticationKey returned")
         assert.equal(contractBalanceBeforeOffer+offerWei, contractBalanceAfterOffer, "Wrong account balance for marketplace after succesful offer")
 
