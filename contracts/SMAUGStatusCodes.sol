@@ -10,4 +10,5 @@ contract SMAUGStatusCodes is StatusCodes {
     uint8 constant internal InsufficientEscrowPayment = 104;
     uint8 constant internal PaymentNotExisting = 105;
     uint8 constant internal PaymentNotResolved = 106;
+    uint8 constant internal EmptyInterledgerPayload = 107;
 }

@@ -550,12 +550,14 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
         // Only IL under a manager's account can call this function
         if(!(msg.sender == owner() || isManager(msg.sender))) {
+            emit FunctionStatus(AccessDenied);
             emit InterledgerEventRejected(nonce);
             return;
         }
 
         // Empty payloads are not accepted
         if (data.length == 0) {
+            emit FunctionStatus(EmptyInterledgerPayload);
             emit InterledgerEventRejected(nonce);
             return;
         }
@@ -567,6 +569,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         bool isOffersArrayValid = validateOffersInInterledgerPayload(offersFulfilled);
 
         if (!isOffersArrayValid) {
+            emit FunctionStatus(ImproperList);
             emit InterledgerEventRejected(nonce);
             return;
         }
@@ -579,6 +582,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
         // Request must be decided
         if (!isRequestDecided) {
+            emit FunctionStatus(ReqNotDecided);
             emit InterledgerEventRejected(nonce);
             return;
         }

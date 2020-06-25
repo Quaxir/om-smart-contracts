@@ -35,6 +35,7 @@ async function main() {
 
     console.log(`Connecting to ${options.n}...`)
     web3MarketplaceInstance = new Web3(options.n)
+    // console.log(web3MarketplaceInstance.utils.hexToBytes("0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")).length)
     console.log(`Retrieving contract at ${options.c}...`)
     let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
     console.log("Available accounts:")
@@ -50,7 +51,7 @@ async function main() {
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
 
-    configureEventListener()
+    configureEventListener(true)
     await handleUserInput()
 }
 
@@ -488,8 +489,8 @@ async function createAndDecideTestRequest() {
         return
     }
     console.log(`New request with extra [${defaultExtra}] and ID ${requestID} created! 🙂🙂🙂`)
-    
-    let offer1Extra = [1, 5, 0, web3MarketplaceInstance.utils.toHex("KEY1")]
+
+    let offer1Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")]
     console.log(`Creating test offer 1 with extra [${offer1Extra}]...`)
     let offer1TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer1Creator, gas: 200000})
     txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
@@ -507,7 +508,7 @@ async function createAndDecideTestRequest() {
     console.log(`New offer with extra [${defaultExtra}] and ID ${offer1ID} created! 💰💰💰`)
     pendingOffers.add(offer1ID)
 
-    let offer2Extra = [1, 5, 0, web3MarketplaceInstance.utils.toHex("KEY2"), web3MarketplaceInstance.utils.toHex("AUTH2")]
+    let offer2Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY2").substr(2).padStart(64, "0"), "0x" + web3MarketplaceInstance.utils.toHex("AUTH-KEY2").substr(2).padStart(64, "0")]
     console.log(`Creating test offer 2 with extra [${offer2Extra}]...`)
     let offer2TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer2Creator, gas: 200000})
     txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
