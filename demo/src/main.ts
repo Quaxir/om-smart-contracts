@@ -50,7 +50,7 @@ async function main() {
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
 
-    configureEventListener(true)
+    configureEventListener()
     await handleUserInput()
 }
 
