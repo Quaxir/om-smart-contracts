@@ -35,7 +35,6 @@ async function main() {
 
     console.log(`Connecting to ${options.n}...`)
     web3MarketplaceInstance = new Web3(options.n)
-    // console.log(web3MarketplaceInstance.utils.hexToBytes("0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")).length)
     console.log(`Retrieving contract at ${options.c}...`)
     let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
     console.log("Available accounts:")

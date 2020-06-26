@@ -9,10 +9,11 @@
         "build:truffle": "npx truffle compile",
         "build:contracts": "npx typechain --target truffle './build/**/*.json'",
         "build:ts": "npx tsc > /dev/null || true",
-        "test:truffle": "npx truffle test",
-        "test:development": "npm run build:truffle && npm run build:ts; npm run test:truffle",
+        "test": "npm run build:truffle && npm run build:ts; npm run test:truffle",
         "test:marketplace": "npm run build:truffle && npm run build:ts; npm run test:truffle -- --network marketplace",
-        "migrate:marketplace": "npm run build; npx truffle migrate --network marketplace",
+        "test:truffle": "npx truffle test",
+        "migrate": "npm run build; npx truffle migrate",
+        "migrate:marketplace": "npm run migrate -- --network marketplace",
         "deploy:marketplace": "./scripts/lunch_marketplace_blockchain"
     },
     "dependencies": {

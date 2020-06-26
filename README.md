@@ -28,9 +28,13 @@ In our case, to make easier and faster to set up the development environment, so
 
 After spinning up the local development blockchain, run `npm run migrate:marketplace`, to deploy the SMAUG smart contracts on the provided marketplace test blockchain. 
 
+If another blockchain network is to be used, then the command to execute will also need to include the name of that blockchain: `npm run migrate -- --network <NETWORK_NAME>`.
+
 ## Test the smart contracts
 
-As mentioned previously, the tests cannot be run on the development blockchain that Truffle spins up to execute the tests, since the SMAUG contract is too big. While it is still possible to execute tests on such a network by running `npm run test:development`, the command will probably fail. To deploy the contracts to test on the provided blockchain, run `npm run test:marketplace`. Ignore any typescript-related errors that might be generated on the console.
+As mentioned previously, the tests cannot be run on the development blockchain that Truffle spins up to execute the tests, since the SMAUG contract is too big. While it is still possible to execute tests on such a network by running `npm run test`, the command will probably fail. To deploy the contracts to test on the provided blockchain, run `npm run test:marketplace`. Ignore any typescript-related errors that might be generated on the console.
+
+If another blockchain network is to be used, then the command to execute will also need to include the name of that blockchain: `npm run test -- --network <NETWORK_NAME>`.
 
 ## Run the demo application
 
