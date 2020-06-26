@@ -12,9 +12,8 @@
         "test:truffle": "npx truffle test",
         "test:development": "npm run build:truffle && npm run build:ts; npm run test:truffle",
         "test:marketplace": "npm run build:truffle && npm run build:ts; npm run test:truffle -- --network marketplace",
-        "deploy:marketplace": "./scripts/lunch_marketplace_blockchain",
-        "migrate:development": "npm run build; npx truffle migrate",
-        "migrate:marketplace": "npm run build; npx truffle migrate --network marketplace"
+        "migrate:marketplace": "npm run build; npx truffle migrate --network marketplace",
+        "deploy:marketplace": "./scripts/lunch_marketplace_blockchain"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^2.5.0",
