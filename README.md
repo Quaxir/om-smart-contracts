@@ -12,7 +12,7 @@ When the project is cloned for the first time, run `npm install`. This will inst
 
 From the root of the project, run `npm run build` to compile the smart contracts and their typescript typings.
 
-### How to migrate
+## Migrate the smart contracts
 
 Migration represents the process of deploying the smart contracts on a target blockchain.
 
@@ -30,7 +30,7 @@ After spinning up the local development blockchain, run `npm run migrate:marketp
 
 ## Test the smart contracts
 
-As mentioned previously, the tests cannot be run on the development blockchain that Truffle spins up to execute the tests, since the SMAUG contract is too big. While it is still possible to execute tests on such a network by running `npm run test:development`, the command will probably fail. To deploy the contracts to test on the provided blockchain, run `npm run test:marketplace`.
+As mentioned previously, the tests cannot be run on the development blockchain that Truffle spins up to execute the tests, since the SMAUG contract is too big. While it is still possible to execute tests on such a network by running `npm run test:development`, the command will probably fail. To deploy the contracts to test on the provided blockchain, run `npm run test:marketplace`. Ignore any typescript-related errors that might be generated on the console.
 
 ## Run the demo application
 
