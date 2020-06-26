@@ -4,7 +4,7 @@
     "description": "Collection of smart contracts for the SMAUG marketplace.",
     "author": "Antonio Antonino <antonio.antonino@ericsson.com>",
     "scripts": {
-        "prepare": "npx typechain --target truffle",
+        "postinstall": "npx typechain --target truffle",
         "build": "npm run build:truffle && npm run build:contracts && npm run build:ts",
         "build:truffle": "npx truffle compile",
         "build:contracts": "npx typechain --target truffle './build/**/*.json'",

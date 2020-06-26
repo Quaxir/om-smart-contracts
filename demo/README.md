@@ -1,18 +1,17 @@
 # Marketplace demo
 
-Very simple (and still incomplete) demo for the marketplace, mainly to be used to test Interledger operations (triggered upon request decision).
+Very simple demo for the marketplace, mainly to be used to test Interledger operations. The script allows to manually create a new request, a new offer, or to decide a request. The script also allows the automate the creation of a request and some offers, of which only a subset is selected as winner by the request creator. The script also listens for Interledger (receiving) events, and shows the access tokens that have been issued for the winning offers.
 
-## Configures
+## Fresh install
 
-Before running the demo, a couple of things need to be done:
-
-1. Copy the SMAUGMarketplace ABI inside `config/abi` folder. The ABI is the result of the compilation process, usually in a Truffle project saved in `build/contracts/<SMART_CONTRACT_NAME>.json`. From the JSON file, copy only the value (usually an array) under the `abi` key.
-2. Configure `config/network.yaml` with the values corresponding to IP and port number of the ganache instance running locally, and with the SMAUG marketplace smart contract, once it's been deployed on such ganache instance.
-
-## Install dependencies
-
-If the demo has never been run (and dependencies never been installed), run `npm install`. This will install all the needed dependencies as well as generated the needed Typescript typings for the Web3 smart contracts.
+Upon a fresh clone of the project, `npm install` must be run. This installs the needed `npm` packages and generates the Web3 typescript bindings for the SMAUG smart contract.
 
 ## Run
 
-Run `npm start` to run the demo. The demo will connect to the provided ganache instance, connect to the smart contract at the address specified in the config file, and create a test request, a bunch of test offers, and then closes and decides the test requests, so that the Interledger protocol, if an Interledger instance has been set up, can be triggered.
+> Before running the demo, a test blockchain must be running. For convenience, the one provided in this project can be used; it can be started by running `npm run deploy:marketplace` from the root of the project.
+
+> Before running the demo, the ABI for the SMAUGMarketPlace smart contract must be copied in `config/abi`. For instance, in this project, it can be retrieved by copying the `abi` array value of `build/contracts/SMAUGMarketPlace.json`. For convenience, the latest ABI is already present in the folder.
+
+The demo application can be run by executing `npm run demo -- --marketplace-address <marketplace_address> --marketplace-abi-path <marketplace_abi_path> --ethereum-address <ethereum_network_address> --marketplace-owner <marketplace_owner_address>`.
+
+For convenience, there is a second script that can be run instead of the previous one, and that is `npm run demo:default`. This will start the demo using default parameters, and assumes that the test marketplace blockchain provided in this project has been deployed. Since it contains a shared state, the addresses of the smart contracts are already defined and do not need to be changed every time the blockchain is restarted. For instance, the `demo:default` npm script will execute the following command: `ts-node ./src/main.ts --marketplace-address 0x9FBE2b9Dc82A2CF41ab46Eed88d2C9617Bb6Eb57 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.01:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46`.
