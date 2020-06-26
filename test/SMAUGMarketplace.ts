@@ -795,8 +795,8 @@ contract("SMAUGMarketPlace", async accounts => {
         let encodedOfferTokenLength = web3.eth.abi.encodeParameter("uint256", encodedOfferToken.length/2).substr(2)        
         interledgerPayloadMetadata = "0x" + `${encodedOfferIDLength}${encodedOfferID}${encodedOfferTokenLength}${encodedOfferToken}`
         tx = await contract.interledgerReceive(givenNonce, interledgerPayloadMetadata, {from: unauthorisedAddress})
-        let generatedEventType = tx.logs[0].event
-        eventGeneratedNonce = tx.logs[0].args.nonce
+        let generatedEventType = tx.logs[1].event
+        eventGeneratedNonce = tx.logs[1].args.nonce
         assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because caller unauthorised.")
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")        
 
@@ -812,8 +812,8 @@ contract("SMAUGMarketPlace", async accounts => {
         await contract.decideRequest(requestID, [offerID], {from: requestCreator})
         givenNonce = 1
         tx = await contract.interledgerReceive(givenNonce, web3.utils.bytesToHex([]), {from: owner})
-        generatedEventType = tx.logs[0].event
-        eventGeneratedNonce = tx.logs[0].args.nonce
+        generatedEventType = tx.logs[1].event
+        eventGeneratedNonce = tx.logs[1].args.nonce
         assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because interledger payload is empty.")
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")        
 
@@ -835,8 +835,8 @@ contract("SMAUGMarketPlace", async accounts => {
         encodedOfferTokenLength = web3.eth.abi.encodeParameter("uint256", encodedOfferToken.length/2).substr(2)        
         interledgerPayloadMetadata = "0x" + `${encodedOfferIDLength}${encodedOfferID}${encodedOfferTokenLength}${encodedOfferToken}`
         tx = await contract.interledgerReceive(givenNonce, interledgerPayloadMetadata, {from: owner})
-        generatedEventType = tx.logs[0].event
-        eventGeneratedNonce = tx.logs[0].args.nonce
+        generatedEventType = tx.logs[1].event
+        eventGeneratedNonce = tx.logs[1].args.nonce
         assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because offer specified is not defined.")
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")
 
@@ -873,8 +873,8 @@ contract("SMAUGMarketPlace", async accounts => {
         interledgerPayloadMetadataOffer2 = `${encodedOfferID2Length}${encodedOfferID2}${encodedOfferToken2Length}${encodedOfferToken2}`
         interledgerPayloadMetadata = "0x" + interledgerPayloadMetadataOffer1 + interledgerPayloadMetadataOffer2
         tx = await contract.interledgerReceive(givenNonce, interledgerPayloadMetadata, {from: owner})
-        generatedEventType = tx.logs[0].event
-        eventGeneratedNonce = tx.logs[0].args.nonce
+        generatedEventType = tx.logs[1].event
+        eventGeneratedNonce = tx.logs[1].args.nonce
         assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because offers belong to two different requests.")
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")        
 
@@ -894,8 +894,8 @@ contract("SMAUGMarketPlace", async accounts => {
         encodedOfferTokenLength = web3.eth.abi.encodeParameter("uint256", encodedOfferToken.length/2).substr(2)        
         interledgerPayloadMetadata = "0x" + `${encodedOfferIDLength}${encodedOfferID}${encodedOfferTokenLength}${encodedOfferToken}`
         tx = await contract.interledgerReceive(givenNonce, interledgerPayloadMetadata, {from: owner})        
-        generatedEventType = tx.logs[0].event
-        eventGeneratedNonce = tx.logs[0].args.nonce
+        generatedEventType = tx.logs[1].event
+        eventGeneratedNonce = tx.logs[1].args.nonce
         assert.equal(generatedEventType, "InterledgerEventRejected", "interledgerReceive() should fail because offer specified is not defined.")
         assert.equal(givenNonce, eventGeneratedNonce, "Nonce given in interledgerReceive() should be = to the one in the event generated.")
     })
