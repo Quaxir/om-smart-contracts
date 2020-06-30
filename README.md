@@ -18,7 +18,7 @@ Migration represents the process of deploying the smart contracts on a target bl
 
 ### Spin up a local blockchain with a shared state
 
-Migrations are run either as a standalone operation, in case a smart contract needs to be deployed on a target blockchain, or as the first step in the testing procedure. In doing so, Truffle spins up a local ganache instance which is then teared down at the end of the tests. Since the size of the SMAUG marketplace smart contract is grater than the maxium size allowed by default on a ganache instance, migrations will fail if not run against a target blockchain that supports greater contract sizes.
+Migrations are run either as a standalone operation, in case a smart contract needs to be deployed on a target blockchain, or as the first step in the testing procedure. In doing so, Truffle spins up a local ganache instance which is then teared down at the end of the tests.
 
 In our case, to make easier and faster to set up the development environment, some scripts are provided to spin up a blockchain locally on the machine on port 8545 using the [Truffle ganache-cli](https://hub.docker.com/r/trufflesuite/ganache-cli/) Docker image. To do so, run `npm run deploy:marketplace`. The Docker container uses a mounted volume for the blockchain database, meaning that restarting the container will preserve the state of the blockchain (all the contracts deployed and all the transactions issued). The state of the blockchain is saved in the `marketplace_state`, **so it is highly discouraged to touch the content of this directory, since that would invalidate the whole blockchain state**.
 
@@ -32,7 +32,7 @@ If another blockchain network is to be used, then the command to execute will al
 
 ## Test the smart contracts
 
-As mentioned previously, the tests cannot be run on the development blockchain that Truffle spins up to execute the tests, since the SMAUG contract is too big. While it is still possible to execute tests on such a network by running `npm run test`, the command will probably fail. To deploy the contracts to test on the provided blockchain, run `npm run test:marketplace`. Ignore any typescript-related errors that might be generated on the console.
+Run `npm run test` if tests must be run on the development blockchain started by Truffle, otherwise `npm run test:marketplace` to run the tests on the local development blockchain. Ignore any typescript-related errors that might be generated on the console.
 
 If another blockchain network is to be used, then the command to execute will also need to include the name of that blockchain: `npm run test -- --network <NETWORK_NAME>`.
 

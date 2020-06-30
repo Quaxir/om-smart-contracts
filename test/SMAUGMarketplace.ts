@@ -362,7 +362,7 @@ contract("SMAUGMarketPlace", async accounts => {
         let requestMinAuctionPrice = 10
         await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, requestMinAuctionPrice, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
-        let offerID = tx.logs[1].args.requestID.toNumber()
+        let offerID = tx.logs[1].args.offerID.toNumber()
         let offerWei = requestDuration * requestMinAuctionPrice
         let inputOfferCreatorEncryptionKey = web3.utils.stringToHex("2wJPyULfLLnYTEFYzByfUR")
         let contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -374,7 +374,7 @@ contract("SMAUGMarketPlace", async accounts => {
         let txStatus = offerExtraDetails.status
         let offerStartingTime = offerExtraDetails.startOfRentTime
         let offerType = offerExtraDetails.offerType
-        let offerWeiRegistered = offerExtraDetails.priceOffered.toNumber()
+        let offerWeiRegistered = parseInt(offerExtraDetails.priceOffered)
         let offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         let offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
@@ -395,7 +395,7 @@ contract("SMAUGMarketPlace", async accounts => {
         requestMinAuctionPrice = 10
         await contract.submitRequestArrayExtra(requestID, [requestStartingTime, requestDuration, requestMinAuctionPrice, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
+        offerID = tx.logs[1].args.offerID.toNumber()
         offerWei = requestDuration * requestMinAuctionPrice
         let inputAuthenticationKey = "0xa5b9d60f32436310afebcfda832817a68921beb782fabf7915cc0460b443116a"
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -425,7 +425,7 @@ contract("SMAUGMarketPlace", async accounts => {
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
         tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
+        offerID = tx.logs[1].args.offerID.toNumber()
         offerWei = requestDuration * 1
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
         tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorEncryptionKey)], {from: offerCreator, value: `${offerWei}`})
@@ -445,7 +445,7 @@ contract("SMAUGMarketPlace", async accounts => {
         txStatus = offerExtraDetails.status
         offerStartingTime = offerExtraDetails.startOfRentTime
         offerType = offerExtraDetails.offerType
-        offerWeiRegistered = offerExtraDetails.priceOffered
+        offerWeiRegistered = offerExtraDetails.priceOffered.toNumber()
         offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")
@@ -463,7 +463,7 @@ contract("SMAUGMarketPlace", async accounts => {
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
         tx = await contract.submitOffer(requestID, {from: offerCreator})
-        offerID = tx.logs[1].args.requestID.toNumber()
+        offerID = tx.logs[1].args.offerID.toNumber()
         offerWei = requestDuration * 1
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
         tx = await contract.submitOfferArrayExtra(offerID, [1, 5, 1, web3.utils.toBN(inputOfferCreatorEncryptionKey), web3.utils.toBN(inputAuthenticationKey)], {from: offerCreator, value: `${offerWei}`})
@@ -483,7 +483,7 @@ contract("SMAUGMarketPlace", async accounts => {
         txStatus = offerExtraDetails.status
         offerStartingTime = offerExtraDetails.startOfRentTime
         offerType = offerExtraDetails.offerType
-        offerWeiRegistered = offerExtraDetails.priceOffered
+        offerWeiRegistered = offerExtraDetails.priceOffered.toNumber()
         offerCreatorEncryptionKey = offerExtraDetails.offerCreatorEncryptionKey
         offerCreatorAuthenticationKey = offerExtraDetails.offerCreatorAuthenticationKey
         assert.equal(txStatus, 0, "getOfferExtra() should succeed.")

@@ -7,10 +7,13 @@ import { AbstractAuthorisedOwnerManageableMarketPlace } from "./abstract/Abstrac
 import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.sol";
 import { UtilsLibrary } from "./libraries/UtilsLibrary.sol";
 
+/**
+@title The official SMAUG marketplace smart contract.
+@author Antonio Antonino <antonio.antonino@ericsson.com>
+@notice The smart contract implements an offer-based marketplace that allows both auction-based and instant-rent transactions between smart locker owner and smart locker renter.
+*/
 contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, RequestArrayExtra, OfferArrayExtra, InterledgerSenderInterface, InterledgerReceiverInterface {
 
-    event Debug(uint value);         // Temporary event, used for debugging purposes
-    event Debug2(bytes valueBytes);
     event OfferClaimable(uint indexed offerID);
     event OfferFulfilled(uint indexed offerID, bytes token);
     event RequestClaimable(uint indexed requestID, uint[] offerIDs);
@@ -38,27 +41,29 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         uint lockerKey;                     // The public key identifying the locker and that will be used to authenticate it, encoded as uint.
     }
 
+    // Each instance of the struct will be one pricing rule in the rules array in the RequestExtra struct above.
     struct InstantRentPricingRule {
         uint minimumNumberOfMinutes;
         uint minimumPricePerMinute;
     }
 
     struct OfferExtra {
-        uint startOfRentTime;               // The proposed start time for the rent in this offer.
-        uint duration;                      // The n. of minutes from startOfRentTime the rent would last.
-        OfferType offerType;                // Specifies whether the money offered is for an auction or an instant buy offer.
-        uint priceOffered;                     // The amount of Ethers that the offer contained.
+        uint startOfRentTime;                   // The proposed start time for the rent in this offer. Must be >= requestExtra.startOfRentTime.
+        uint duration;                          // The n. of minutes from startOfRentTime the rent would last. startOfRentTime + duration <= requestExtra.startOfRentTime + requestExtra.duration.
+        OfferType offerType;                    // Specifies whether the money offered is for an auction or an instant buy offer.
+        uint priceOffered;                      // The amount of Wei that the offer contained.
         uint offerCreatorEncryptionKey;         // The key to decrypt the issued access token, in case the offer is selected.
-        uint offerCreatorAuthenticationKey;      // OPTIONAL. This key would be used by the receiver of the access token to authenticate him/her self to the smart locker. If no key is provided in the offer, the generated token will be a bearer token.
+        uint offerCreatorAuthenticationKey;     // OPTIONAL. The key used by the receiver of the access token to authenticate him/her self to the smart locker. If no key is provided in the offer, the generated token will be a bearer token.
     }
 
     struct PaymentDetails {
-        bool created;
-        bool resolved;
-        bool toReturn;
-        uint amount;
+        bool created;                           // Indicates whether the struct is valid (exists in the mapping which is part of).
+        bool resolved;                          // Indicates whether the payment is pending (resolved == false) or not. If not, the money can be claimed back.
+        bool toReturn;                          // Indicates whether the money locked in the payment is to return to the offer creator (toReturn == true) or to move to the request creator, if the offer is a winning one.
+        uint amount;                            // The amount of Wei associated with the payment.
     }
 
+    // Representes a single element in the Interledger payload that the marketplace receive. It contains the information about what offer has been "fulfilled", and what is the associated (encrypted) access token.
     struct InterledgerPayloadElement {
         uint offerID;
         bytes encryptedToken;
@@ -66,12 +71,12 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     enum OfferType { Auction, InstantRent }
 
+    // Minimum length of extra elements for a request extra submission.
+    uint constant private minimumNumberOfRequestExtraElements = 4;               // requestExtra.rules is optional (empty array)
 
-    uint private minimumNumberOfRequestExtraElements = 4;               // rules is optional
-
-    uint private minimumNumberOfOfferExtraElements = 4;                 // offerCreatorAuthenticationKey is optional
-    uint private maximumNumberOfOfferExtraElements = 5;
-
+    // Minimum and maximum length of extra elements for an offer extra submission.
+    uint constant private minimumNumberOfOfferExtraElements = 4;                 // offerExtra.offerCreatorAuthenticationKey is optional
+    uint constant private maximumNumberOfOfferExtraElements = 5;
 
     mapping (uint => RequestExtra) private requestsExtra;
     mapping (uint => OfferExtra) private offersExtra;
@@ -79,14 +84,35 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     // requestID -> [offerID]. Keeps track of the requests that have been decided but not fulfilled (no token issued)
     mapping(uint => uint[]) private openOffersPerRequest;
 
-    mapping (uint => PaymentDetails) private pendingPayments;                     // offerID -> details for an offer
+    // offerID -> details. Keeps track of the money that has been moved upon each offer submission.
+    // This is the main variable keeping track of where and how much money should go where upon request decision.
+    mapping (uint => PaymentDetails) private pendingPayments;
 
-
+    /**
+    @notice Creates a new SMAUGMarketPlace instance and registers the submitRequestArrayExtra and submitOfferArrayExtra interface compliance.
+    @dev Interface compliance follows the ERC165 standard.
+    */
     constructor() AbstractAuthorisedOwnerManageableMarketPlace() public {
         _registerInterface(this.submitRequestArrayExtra.selector);
         _registerInterface(this.submitOfferArrayExtra.selector);
     }
 
+    /**
+    @notice Submit extra information for a previously-created request.
+    @param requestID The ID of the request.
+    @param extra The extra information to submit for the request. Specifically:
+        - extra[0] = startOfRentTime
+        - extra[1] = duration
+        - extra[2] = auctionMinPricePerSlot
+        - extra[3...2n, n >= 2] = rules. Must be in even number. Each element at index 3 + 2m (m >= 0) must be smaller than element at index 3 + 2m + 2.
+        - extra[2n + 1] = lockerKey.
+    @dev The following requirements are to be met for a successful operation:
+        - the length of the extra array must be the minimum required (4).
+        - the request must exist and must be pending (i.e., missing the extra information being submitted with this function).
+        - the submitter of the request extra must be the same that previously created the request.
+        - the extra array must comply with the requirements expressed in @param extra and in the variable declaration.
+    @return The tuple (status, reqID) where status is the status code of the transaction, and reqID is the request ID given in input.
+    */
     function submitRequestArrayExtra(uint requestID, uint[] calldata extra) external returns (uint8 status, uint reqID) {
 
         if (extra.length < minimumNumberOfRequestExtraElements) {
@@ -175,6 +201,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return (Successful, _rules);
     }
 
+    /**
+    @notice Returns the extra information associated with a request.
+    @param requestIdentifier The ID of the request.
+    @return The status code of the operation and the detais (startOfRentTime, duration, auctionMinPricePerSlot, instantBuyRules, lockerID) associated with the given request identifier.
+    */
     function getRequestExtra(uint requestIdentifier) public view
         returns (uint8 status, uint startOfRentTime, uint duration, uint auctionMinPricePerSlot, uint[] memory instantBuyRules, uint lockerID) {
             (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
@@ -206,6 +237,24 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return _rules;
     }
 
+    /**
+    @notice Decide a request, by selecting a subset of the offers for that request as winning.
+    @param requestIdentifier The ID of the request.
+    @param acceptedOfferIDs The IDs of the selected offers for the given request.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the request must exist and must be in the correct state (e.g., not already decided in a previous operation).
+        - the caller of the decision operation must be the same that previously created the request.
+        - each offer in the list of offer IDs must refer to the same request being decided and must be complete (i.e., it includes the extra information).
+    The decision of a request triggers an Interledger event where the payload is a list, and each element in the list has the following format:
+        x + offerID + offerCreatorEncryptionKey [+ offerCreatorAuthenticationKey]
+            - byte x = 1 if offerCreatorAuthenticationKey is not null, 0 otherwise
+            - bytes offerID = the value of the offer ID, ABI-encoded as bytes
+            - bytes offerCreatorEncryptionKey = the value of the offer creator encryption key (max 32 bytes), ABI-encoded as bytes
+            - bytes offerCreatorAuthenticationKey = the value of the offer creator authentication key (OPTIONAL, max 32 bytes), ABI-encoded as bytes
+    offerCreatorEncryptionKey and offerCreatorAuthenticationKey are max 32 bytes because given as array extra parameters in `submitRequestArrayExtra` which allows for uint256 values. Might be worth creating another way of passing data via bytes. So, each entry in the list is long either 33 or 65 bytes, depending on the value of the first byte (33 (1 + 32) if first byte is 0, 65 (1 + 32 + 32) if 1).
+    @return The status code of the transaction.
+    */
     function decideRequest(uint requestIdentifier, uint[] memory acceptedOfferIDs) public returns (uint8 status) {
         (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
 
@@ -246,7 +295,6 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             }
 
             if (offers[acceptedOfferIDs[j]].offStage != Stage.Open) {
-                emit Debug(acceptedOfferIDs[j]);
                 return false;
             }
 
@@ -260,6 +308,15 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return true;
     }
 
+    /**
+    @notice Close a request, stopping people from making offers, but withouth deciding the winning offers.
+    @param requestIdentifier The ID of the request.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the request must exist and must be in the correct state (e.g., not already closed in a previous operation).
+        - the caller of the decision operation must be the same that previously created the request.
+    @return The status code of the transaction.
+    */
     function closeRequest(uint requestIdentifier) public returns (uint8 status) {
         (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
 
@@ -285,6 +342,16 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return super.closeRequestInsecure(request);
     }
 
+    /**
+    @notice Deletes a request from the contract, freeing up space.
+    @param requestIdentifier The ID of the request.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the request must exist and must be in the correct state (e.g., already decided).
+        - the caller of the decision operation must be the same that previously created the request.
+        - the minimum time for deletion has passed since the request was closed.
+    @return The status code of the transaction.
+    */
     function deleteRequest(uint requestIdentifier) public returns (uint8 status) {
         (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
 
@@ -315,6 +382,17 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return super.deleteRequestInsecure(request);
     }
 
+    /**
+    @notice Submit an offer for an open request.
+    @param requestID The ID of the request.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the request must exist and must be in the open state.
+        - the deadline for offer submissions has not passed for the request.
+        - the submitter of the request extra must be the same that previously created the request.
+    This operation will create an offer which is pending (not open), meaning that to be considered the offer creator must also submit the extra information by calling `submitOfferArrayExtra`.
+    @return The tuple (status, offerID) where status is the status code of the transaction, and offerID is the offer ID created by the smart contract.
+    */
     function submitOffer(uint requestID) public returns (uint8 status, uint offerID) {
         (, bool isRequestDefined) = isRequestDefined(requestID);
 
@@ -338,6 +416,27 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         super.submitOffer(requestID);
     }
 
+    /**
+    @notice Submit extra information for a previously-submitted offer.
+    @param offerID The ID of the offer.
+    @param extra The extra information to submit for the offer. Specifically:
+        - extra[0] = startOfRentTime
+        - extra[1] = duration
+        - extra[2] = offerType
+        - extra[3] = offerCreatorEncryptionKey
+        - extra[4] = offerCreatorAuthenticationKey (OPTIONAL)
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the length of the extra array must be in the expected range ([4, 5]).
+        - the offer must exist and must be pending (i.e., missing the extra information being submitted with this function).
+        - the submitter of the offer extra must be the same that previously created the offer.
+        - the request for which the offer is submitted must be open, i.e., accepting offers.
+        - the offer must respect the type of request, i.e., if a request only accepts auction offers, the offer cannot be an instant rent offer.
+        - the total amount paid in the offer must respect the minimum value requirements specified in the request extra (either auctionMinPricePerSlot * duration for auctions, or the correct rule for the total duration indicated in the offer).
+        - the extra array must comply with the requirements expressed in @param extra and in the variable declaration.
+    If the transaction fails, it reverts (no state is changed, Weis, minus the gas fees, returned to the offer creator).
+    @return The tuple (status, offID) where status is the status code of the transaction, and offID is the offer ID given in input.
+    */
     function submitOfferArrayExtra(uint offerID, uint[] calldata extra) external payable returns (uint8 status, uint offID) {
         require(
             extra.length >= minimumNumberOfOfferExtraElements && extra.length <= maximumNumberOfOfferExtraElements,
@@ -372,8 +471,8 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         OfferExtra memory offerExtra = buildOfferExtraFromRawArray(extra);
 
         validateOfferExtraAndPaymentAgainstRequestExtra(requestExtra, offerExtra, msg.value);
-
         updateOfferAndRegisterPendingPayment(offerExtra, offerID, msg.value);
+
         offersExtra[offerID] = offerExtra;
         offer.offStage = Stage.Open;
 
@@ -468,15 +567,14 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     /*
-    Returns the concatenation of all the offer IDs winner DIDs, and winner authKey, if present.
-    Each entry in the list has the following format:
-        x + offerID + offerDID [+ offerAuthKey]
-            byte x = 1 if offerAuthKey is not null, 0 otherwise
-            bytes offerID = the value of the offer ID
-            bytes offerDID = the value of the offer creator DID (max 32)
-            bytes offerAuthKey = the value of the offer creator auth key (OPTIONAL, max 32)
-    DIDs and authKey are max 32 bytes because given as array extra parameters which allow for uint256 values max. Might be worth creating another way of passing data via bytes.
-    So, each entry in the list is long either 33 or 65 bytes, depending on the value of the first byte (33 if first byte is 0, 65 if 1).
+    Returns the concatenation of all the offer IDs winner offerCreatorEncryptionKey, and winner authKey, if present.
+    Each element in the list has the following format:
+        x + offerID + offerCreatorEncryptionKey [+ offerCreatorAuthenticationKey]
+            - byte x = 1 if offerCreatorAuthenticationKey is not null, 0 otherwise
+            - bytes offerID = the value of the offer ID, ABI-encoded as bytes
+            - bytes offerCreatorEncryptionKey = the value of the offer creator encryption key (max 32 bytes), ABI-encoded as bytes
+            - bytes offerCreatorAuthenticationKey = the value of the offer creator authentication key (OPTIONAL, max 32 bytes), ABI-encoded as bytes
+    offerCreatorEncryptionKey and offerCreatorAuthenticationKey are max 32 bytes because given as array extra parameters in `submitRequestArrayExtra` which allows for uint256 values. Might be worth creating another way of passing data via bytes. So, each entry in the list is long either 33 or 65 bytes, depending on the value of the first byte (33 (1 + 32) if first byte is 0, 65 (1 + 32 + 32) if 1).
     */
     function getInterledgerPayloadFromOfferExtra(uint offerID, OfferExtra storage offerExtra) private view returns (bytes memory) {
         uint offerDID = offerExtra.offerCreatorEncryptionKey;
@@ -504,6 +602,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return rules[rules.length-1].minimumPricePerMinute;
     }
 
+    /**
+    @notice Returns the extra information for an offer.
+    @param offerIdentifier The ID of the offer.
+    @return The status code of the operation and the detais (startOfRentTime, duration, offerType, priceOffered, offerCreatorEncryptionKey, offerCreatorAuthenticationKey) associated with the given request identifier.
+    */
     function getOfferExtra(uint offerIdentifier)
     public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint priceOffered, uint offerCreatorEncryptionKey, uint offerCreatorAuthenticationKey) {
         Offer storage offer = offers[offerIdentifier];
@@ -525,6 +628,10 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         );
     }
 
+    /**
+    @notice Returns the type (the unique identifier) of the marketplace.
+    @return The type (the unique identifier) of the marketplace.
+    */
     function getType() external view returns (uint8 status, string memory) {
         return (Successful, "eu.sofie-iot.smaug-marketplace");
     }
@@ -540,11 +647,14 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     // Interledger receiver interface support
 
     /*
-        Called by IL when an access token has been issued on the authorisation blockchain. Data will contain the offer ID for which the token has been released and the encrypted token.
-        Payload will have the following structure:
-            - [(32 bytes for metadata length, n bytes for metadata, 32 bytes for encrypted token length, m bytes for encrypted token)]. Repeated for each token.
-        TODO: 32 bytes for lengths is wasted space, probably 2 bytes would be enough.
-        TODO: Do something with the received access token as well (not used for now).
+    Called by IL when an access token has been issued on the authorisation blockchain. Data will contain the offer IDs for which a token has been released and the relative encrypted token.
+    Payload will be a list of elements, where each element has the following structure:
+        - ML: length of the metadata field in bytes (32 bytes)
+        - M: metadata (ML bytes)
+        - TL: length of the encrypted token in bytes (32 bytes)
+        - T: encrypted token (TL bytes)
+    TODO: 32 bytes for lengths is wasted space, probably 2 bytes would be enough.
+    TODO: Do something with the received access token as well (not used for now).
     */
     function interledgerReceive(uint256 nonce, bytes memory data) public {
 
@@ -562,9 +672,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
             return;
         }
 
-        // TODO: Validate the payload for each single request being built (i.e., data not in the expected form). 1/3
-        // In case the payload has an incorrect structure, decodeInterledgerPayload will probably revert. 2/3
-        // We want to avoid that and instead just discard the interledger event. 3/3
+        /*
+        TODO: Validate the payload for each single request being built (i.e., data not in the expected form). 1/3
+        In case the payload has an incorrect structure, decodeInterledgerPayload will probably revert. 2/3
+        We want to avoid that and instead just discard the interledger event. 3/3
+        */
         InterledgerPayloadElement[] memory offersFulfilled = decodeInterledgerPayload(data);
         bool isOffersArrayValid = validateOffersInInterledgerPayload(offersFulfilled);
 
@@ -643,11 +755,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     }
 
     /*
-        Notifies the losing offer creators and the request creator that the money can be claimed.
-        Generates the following events:
-        - one OfferFulfilled(offerID, token) event for each offer that has been fulfilled
-        - one OfferClaimable(offerID) event for each offer that has not been selected as winning
-        - one RequestClaimable(requestID, offerIDs) at the end
+    Notifies the losing offer creators and the request creator that the money can be claimed.
+    Generates the following events:
+        - one OfferFulfilled(offerID, token) event for each offer that has been fulfilled.
+        - one OfferClaimable(offerID) event for each offer that has not been selected as winning.
+        - one RequestClaimable(requestID, offerIDs) at the end.
     */
     function resolveRequest(Request storage request, InterledgerPayloadElement[] memory offersFulfilled) private {
         uint[] storage openOffers = openOffersPerRequest[request.ID];
@@ -676,6 +788,19 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
     // Money operations
 
+    /**
+    @notice Allows an authorised account to withdraw Ethers from the marketplace.
+    @param offerID The ID of the offer for which the money is being claimed.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - The offer being referred must exist, and must belong to a decided request.
+        - The request being referenced by the offer must have been fulfilled, i.e., a set of access tokens must have been issued for the set of winning offers.
+        - The account withdrawing must be authorised:
+            * If the offer is a winning one, only the request creator can withdraw.
+            * If the offer is not a winning one, only the offer creator can withdraw.
+    If the transaction fails, it reverts (no state is changed, Weis, minus the gas fees, returned to the offer creator).
+    @return The tuple (status, amount) where status is the status code of the transaction, and amount is the amount of money that was escrowed with the offer.
+    */
     function withdraw(uint offerID) public returns (uint8 status, uint amount) {
         PaymentDetails storage paymentDetails = pendingPayments[offerID];
 

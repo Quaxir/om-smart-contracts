@@ -7,6 +7,11 @@ import { AuthorisedManageableMarketPlace } from "../interfaces/AuthorisedManagea
 import { SMAUGStatusCodes } from "../SMAUGStatusCodes.sol";
 import { AccessTokenLibrary } from "../libraries/AccessTokenLibrary.sol";
 
+/**
+@notice An abstract contract implementing the `AuthorisedManageableMarketPlace`, `AbstractMarketPlace` and `MultiManagersBaseContract` contract from the SOFIE Marketplace component. The contract extends the functionality of request creation by requiring the presentation of a valid access token by the calling entity.
+@author Antonio Antonino <antonio.antonino@ericsson.com>
+@dev The contract is abstract, so it can only be instantiated via one of its subclasses. As of today, the only known subclass is `SMAUGMarketPlace.sol`.
+*/
 contract AbstractAuthorisedOwnerManageableMarketPlace is
 AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace, SMAUGStatusCodes {
 
@@ -16,7 +21,10 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
     mapping(bytes32 => bool) private usedTokens;
     bytes32[] private tokenReferences;
 
-
+    /**
+    @notice Provides initialisation instructions for all subclassing contracts. It registers the management interface conformance (submitRequest, closeRequest, decideRequest, deleteRequest).
+    @dev Interface compliance follows the ERC165 standard.
+    */
     constructor() AbstractMarketPlace() MultiManagersBaseContract(msg.sender) public {
         _registerInterface(this.submitRequest.selector ^
                             this.closeRequest.selector ^
@@ -25,6 +33,11 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         );
     }
 
+    /**
+    @notice Reset the history of used access tokens.
+    @dev DANGEROUS SINCE OWNERS OF OLD ACCESS TOKENS COULD RE-USE THEM WITHOUT SUPERVISION OF THE MARKETPLACE OWNER. Only the marketplace owner or a manager can call this function.
+    @return The status code of the operation.
+    */
     function resetAccessTokens() public returns (uint8 status) {
         if(!(msg.sender == owner() || isManager(msg.sender))) {
             emit FunctionStatus(AccessDenied);
@@ -53,6 +66,23 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         openRequestIDs.push(requests[requestIdentifier].ID);
     }
 
+    /**
+    @notice Create a new a request.
+    @param tokenDigest The digest of the access token used to invoke this function.
+    @param signature The signature over the token digest.
+    @param nonce A nonce used to generate the token digest
+    @param deadline The deadline after which the request will not be accepting new offers anymore.
+    @dev
+    The following requirements are to be met for a successful operation:
+        - the token used must be valid. Specifically, it must fulfill the following requirements:
+            * The account calling this function must match the token subject.
+            * The smart contract account must match the token audience.
+            * The function selector of the token must match the ABI of this function.
+            * The nonce of the token must not have been previously used.
+            * The access token must have been signed by a marketplace manager.
+    This operation will create a request which is pending (not open), meaning that to be considered by potential offer creators the request creator must also submit the extra information by calling `submitRequestArrayExtra`.
+    @return The tuple (status, requestID) where status is the status code of the transaction, and requestID is the request ID created by the smart contract.
+    */
     function submitRequest
         (bytes32 tokenDigest, bytes memory signature, bytes32 nonce, uint deadline)
         public returns (uint8 status, uint requestID) {
@@ -105,7 +135,10 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         usedTokens[token] = true;
     }
 
-    // When offer marketplace will be updated, the AbstractManageableMarketplace contract will check that a request exists before doing any operation. Issue reported on 01/04/2020 at 13:20.
+    /*
+    When offer marketplace will be updated, the AbstractManageableMarketplace contract will check that a request exists before doing any operation.
+    Functionality missing in the original SOFIE AbstractManageableMarketPlace smart contract. Issue reported on 01/04/2020 at 13:20.
+    */
     function closeRequest(uint requestIdentifier) public returns (uint8 status) {
         (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
 
@@ -211,6 +244,10 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         }
     }
 
+    /**
+    @notice Get the marketplace information, i.e., the owner address of the marketplace.
+    @return The tuple (status, ownerAddress) where status is the status code of the transaction, and ownerAddress is the owner of the marketplace.
+    */
     function getMarketInformation() public view returns (uint8 status, address ownerAddress) {
         return (Successful, owner());
     }

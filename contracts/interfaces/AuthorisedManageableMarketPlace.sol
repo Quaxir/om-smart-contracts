@@ -1,5 +1,8 @@
 pragma solidity ^0.5.0;
 
+/**
+@notice An interface for a manageable marketplace where request creation is limited to callers owning a valid access token.
+*/
 interface AuthorisedManageableMarketPlace {
 
     function submitRequest
