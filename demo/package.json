@@ -3,7 +3,7 @@
     "postinstall": "npm run generateWeb3Types",
     "generateWeb3Types": "npx typechain --target=web3-v1 'config/abi/*.json'",
     "demo": "ts-node ./src/main.ts",
-    "demo:default": "ts-node ./src/main.ts --marketplace-address 0x51Cdd045E893528fB7C6F2DCEB07Efa9eb2FB375 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.01:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46",
+    "demo:default": "ts-node ./src/main.ts --marketplace-address 0x51Cdd045E893528fB7C6F2DCEB07Efa9eb2FB375 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.0.1:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46",
     "watch": "npx tsc -w"
   },
   "dependencies": {
