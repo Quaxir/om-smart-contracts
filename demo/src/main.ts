@@ -7,6 +7,12 @@ import * as utils from "./utils"
 import yargs from "yargs"
 import inquirer, { QuestionCollection } from "inquirer"
 import { EventEmitter } from "events"
+import { URL } from "url"
+import fetch from "node-fetch"
+import { request } from "http"
+import appendQuery from "append-query"
+import urljoin from "url-join"
+import { util } from "chai"
 
 main().catch(error => {
     console.error(error)
@@ -19,6 +25,7 @@ main().catch(error => {
 var web3MarketplaceInstance: Web3
 var marketplaceOwner: string
 var SMAUGMarketplaceInstance: SMAUGMarketplace
+var backendURL: URL
 
 var pendingOffers: Set<number>
 var unseenOfferFulfilledEvents: OfferFulfilled[]
@@ -26,19 +33,16 @@ var unseenOfferUnFulfilledEvents: OfferClaimable[]
 
 async function main() {
     const options = yargs
-                        .usage("Usage: -c <marketplace_contract_address> -a <marketplace_contract_ABI> -n <Ethereum_Network_address> -o <marketplace_contract_owner_address>")
+                        .usage("Usage: -c <marketplace_contract_address> -b <marketplace_backend_url> -a <marketplace_contract_ABI> -n <Ethereum_Network_address> -o <marketplace_contract_owner_address>")
                         .option("c", {alias: "marketplace-address", describe: "The address of the marketplace to interact with.", type: "string", demandOption: true})
                         .option("a", {alias: "marketplace-abi-path", describe: "The path to the ABI of the marketplace to interact with.", type: "string", demandOption: true})
+                        .option("b", {alias: "backend-url", describe: "The URL of the marketplace backend.", type: "string", demandOption: true})
                         .option("n", {alias: "ethereum-address", describe: "The address of the marketplace Ethereum instance.", type: "string", demandOption: true})
                         .option("o", {alias: "marketplace-owner", describe: "The address of the owner of the marketplace smart contract.", type: "string", demandOption: true})
                         .argv
 
-    console.log(`Connecting to ${options.n}...`)
     web3MarketplaceInstance = new Web3(options.n)
-    console.log(`Retrieving contract at ${options.c}...`)
     let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
-    console.log("Available accounts:")
-    console.log(availableAccounts)
     SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(options.a).toString()), options.c) as any) as SMAUGMarketplace
 
     if(!Web3.utils.isAddress(options.o)) {
@@ -46,16 +50,39 @@ async function main() {
     }
     marketplaceOwner = options.o
 
+    try {
+        backendURL = new URL(options.b)
+    } catch {
+        throw Error("Marketplace URL is not a valid URL.")
+    }    
+
+    console.log(`Arguments used:\n
+        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.b}\n
+        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.c}\n
+        - MARKETPLACE BACKEND ADDRESS: ${options.b}
+    `)
+
+    console.log("Available accounts:")
+    let accounts = await web3MarketplaceInstance.eth.getAccounts()
+    let balances = await Promise.all(accounts.map(async (account) => {
+        return await web3MarketplaceInstance.eth.getBalance(account)
+    }))
+    console.log(accounts.map((account, index) => {
+        return `${account} - ${balances[index]} wei`
+    }))
+
     pendingOffers = new Set()
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
 
-    configureEventListener(true)
+    configureEventListener(false)
     await handleUserInput()
 }
 
 function configureEventListener(debug: boolean = false) {
-    console.log("Configuring event listener...")
+    if (debug) {
+        console.log("Configuring event listener...")
+    }
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
             console.log(event)
@@ -77,7 +104,9 @@ function configureEventListener(debug: boolean = false) {
             }
         }
     })
-    console.log("Event listener configured.")
+    if (debug) {
+        console.log("Event listener configured.")
+    }
 }
 
 async function handleUserInput(): Promise<void> {
@@ -127,9 +156,9 @@ async function handleUserInput(): Promise<void> {
             case "decideRequest": {
                 await handleRequestDecision(); break;
             }
-            case "automaticLifeCycle": {
-                await createAndDecideTestRequest(); break;
-            }
+            // case "automaticLifeCycle": {
+            //     await createAndDecideTestRequest(); break;
+            // }
             case "checkForOffersEvents": {
                 printNewOffersFulfilled(true)
                 printNewOffersUnfulfilled(true)
@@ -166,44 +195,77 @@ function printNewOffersUnfulfilled(force: boolean = false) {
 
 async function handleRequestCreation(): Promise<void> {
     const requestDetails = await inquirer.prompt(getRequestCreationQuestions())
-    console.log("Creating request...")
+    console.log(`Creating request using Ethereum address: ${requestDetails.creatorAccount}...`)
 
-    // Create valid access token for request creation
-    let requestCreationToken = await utils.generateFunctionSignedTokenWithAccount(SMAUGMarketplaceInstance.options.jsonInterface, "submitRequest", requestDetails.creatorAccount, SMAUGMarketplaceInstance.options.address, web3MarketplaceInstance, marketplaceOwner)
+    console.log("Requesting new access token from marketplace backend...")
+    let backendEndpoint = urljoin(backendURL.toString(), "api", "marketplace", "gettoken")
+    backendEndpoint = appendQuery(backendEndpoint, {ethereum_address: requestDetails.creatorAccount})
+    console.log(`Backend endpoint queried: ${backendEndpoint}`)
 
+    let requestCreationTokenResponse = await fetch(backendEndpoint)
+    let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
+    console.log("Request token obtained from backend:")
+    // Hard-coded values, but it works
+    console.log(requestCreationToken)
+    console.log("Token content decoded:")
+    console.log({
+        nonce: "0x" + (requestCreationToken.encoded as string).substr(2, 64),
+        methodSelector: "0x" + (requestCreationToken.encoded as string).substr(66, 8),
+        requestCreatorAddress: "0x" + (requestCreationToken.encoded as string).substr(74, 40),
+        contractAddress: "0x" + (requestCreationToken.encoded as string).substr(114)
+    })
+
+    await utils.waitForEnter()
+    
     // Create request
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.tokenDigest, requestCreationToken.signature, requestCreationToken.nonce,requestDetails.requestDeadline).send({from: requestDetails.creatorAccount, gas: 200000})
+    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, new Date(requestDetails.requestDeadline).getTime() / 1000).send({from: requestDetails.creatorAccount, gas: 200000})
+    console.log("Request creation transaction result:")
+    console.log(newRequestTransactionResult)
+
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         console.error(`Request creation failed with status ${txStatus}`)
         return
     }
     let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
+    console.log(`Request created with ID ${requestID}.`)
+
+    await utils.waitForEnter()
     
     // Create request extra
-    let requestExtra = [requestDetails.requestStartingTime, requestDetails.requestDuration, requestDetails.minAuctionPrice, requestDetails.lockerID]
+    let requestExtra = [new Date(requestDetails.requestStartingTime).getTime() / 1000, requestDetails.requestDuration, requestDetails.minAuctionPrice, requestDetails.lockerID]
     let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 200000})
-    txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    console.log("Request extra submission transaction result:")
+    console.log(newRequestExtraTransactionResult)
+    txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         console.error(`Request creation failed with status ${txStatus}`)
         return
     }
-    console.log(`Request created with ID ${requestID}! 🙂🙂🙂`)
+
+    await utils.waitForEnter()
+
+    console.log("Request creation complete!")
 }
 
 // Expected answers from these questions are {requestDeadline: string, requestStartingTime: string, requestDuration: string, minAuctionPrice: string, lockerID: string, creatorAccount: string}
 function getRequestCreationQuestions(): inquirer.QuestionCollection {
     return [
         {
-            type: "input",
+            type: "string",
             name: "requestDeadline",
             message: "Request deadline",
             validate: (input) => {
                 try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
+                    let datetime = new Date(input)
+                    if (isNaN(datetime.getTime())) {
+                        return "Not a valid date."
                     }
-                    return "Value must be > 0."
+                    let secondsSinceEpoch = datetime.getTime() / 1000
+                    if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                        return "Deadline must not be already past."
+                    }
+                    return true
                 } catch {
                     return "Value is not a number."
                 }
@@ -215,19 +277,24 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             message: "Request starting time",
             validate: (input) => {
                 try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
+                    let datetime = new Date(input)
+                    if (isNaN(datetime.getTime())) {
+                        return "Not a valid date."
                     }
-                    return "Value must be > 0."
+                    let secondsSinceEpoch = datetime.getTime() / 1000
+                    if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                        return "Deadline must not be already past."
+                    }
+                    return true
                 } catch {
                     return "Value is not a number."
                 }
-            }            
+            }
         },
         {
             type: "input",
             name: "requestDuration",
-            message: "Request duration",
+            message: "Request duration (in minutes)",
             validate: (input) => {
                 try {
                     if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
@@ -463,92 +530,92 @@ function getRequestDecisionQuestions(): inquirer.QuestionCollection {
     ] as inquirer.QuestionCollection
 }
 
-async function createAndDecideTestRequest() {
-    // Assuming a ganache test network with unlocked accuonts is used
-    let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
-    let marketplaceOwner = availableAccounts[0]
-    let requestCreator = availableAccounts[1]
-    let offerer1Creator = availableAccounts[2]
-    let offerer2Creator = availableAccounts[3]
-    let offerer3Creator = availableAccounts[4]
-    let requestCreationToken = await utils.generateFunctionSignedTokenWithAccount(SMAUGMarketplaceInstance.options.jsonInterface, "submitRequest", requestCreator, SMAUGMarketplaceInstance.options.address, web3MarketplaceInstance, marketplaceOwner)
+// async function createAndDecideTestRequest() {
+//     // Assuming a ganache test network with unlocked accuonts is used
+//     let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
+//     let marketplaceOwner = availableAccounts[0]
+//     let requestCreator = availableAccounts[1]
+//     let offerer1Creator = availableAccounts[2]
+//     let offerer2Creator = availableAccounts[3]
+//     let offerer3Creator = availableAccounts[4]
+//     let requestCreationToken = await utils.generateFunctionSignedTokenWithAccount(SMAUGMarketplaceInstance.options.jsonInterface, "submitRequest", requestCreator, SMAUGMarketplaceInstance.options.address, web3MarketplaceInstance, marketplaceOwner)
     
-    let defaultExtra = [1, 100, 1, 1]           // [start time, duration, min auction price, locker key]
-    console.log(`Creating new request with extra [${defaultExtra}]...`)
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.tokenDigest, requestCreationToken.signature, requestCreationToken.nonce, 10000000000).send({from: requestCreator, gas: 200000})
-    let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`submitRequest failed with status ${txStatus}`)
-        return
-    }
-    let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, defaultExtra).send({from: requestCreator, gas: 200000})
-    txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`submitRequest failed with status ${txStatus}`)
-        return
-    }
-    console.log(`New request with extra [${defaultExtra}] and ID ${requestID} created! 🙂🙂🙂`)
+//     let defaultExtra = [1, 100, 1, 1]           // [start time, duration, min auction price, locker key]
+//     console.log(`Creating new request with extra [${defaultExtra}]...`)
+//     let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.tokenDigest, requestCreationToken.signature, requestCreationToken.nonce, 10000000000).send({from: requestCreator, gas: 200000})
+//     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+//     if (txStatus != 0) {
+//         console.error(`submitRequest failed with status ${txStatus}`)
+//         return
+//     }
+//     let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
+//     let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, defaultExtra).send({from: requestCreator, gas: 200000})
+//     txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
+//     if (txStatus != 0) {
+//         console.error(`submitRequest failed with status ${txStatus}`)
+//         return
+//     }
+//     console.log(`New request with extra [${defaultExtra}] and ID ${requestID} created! 🙂🙂🙂`)
 
-    let offer1Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")]
-    console.log(`Creating test offer 1 with extra [${offer1Extra}]...`)
-    let offer1TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer1Creator, gas: 200000})
-    txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`submitOffer failed with status ${txStatus}`)
-        return
-    }
-    let offer1ID = parseInt(offer1TransactionResult.events!.OfferAdded.returnValues.offerID)
-    try {
-        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer1ID, offer1Extra).send({from: offerer1Creator, gas: 1000000, value: "5"})
-    } catch (e) {
-        console.error(`submitOfferArrayExtra failed with error ${e}`)
-        return
-    }
-    console.log(`New offer with extra [${offer1Extra}] and ID ${offer1ID} created! 💰💰💰`)
-    pendingOffers.add(offer1ID)
+//     let offer1Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")]
+//     console.log(`Creating test offer 1 with extra [${offer1Extra}]...`)
+//     let offer1TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer1Creator, gas: 200000})
+//     txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+//     if (txStatus != 0) {
+//         console.error(`submitOffer failed with status ${txStatus}`)
+//         return
+//     }
+//     let offer1ID = parseInt(offer1TransactionResult.events!.OfferAdded.returnValues.offerID)
+//     try {
+//         await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer1ID, offer1Extra).send({from: offerer1Creator, gas: 1000000, value: "5"})
+//     } catch (e) {
+//         console.error(`submitOfferArrayExtra failed with error ${e}`)
+//         return
+//     }
+//     console.log(`New offer with extra [${offer1Extra}] and ID ${offer1ID} created! 💰💰💰`)
+//     pendingOffers.add(offer1ID)
 
-    let offer2Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY2").substr(2).padStart(64, "0"), "0x" + web3MarketplaceInstance.utils.toHex("AUTH-KEY2").substr(2).padStart(64, "0")]
-    console.log(`Creating test offer 2 with extra [${offer2Extra}]...`)
-    let offer2TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer2Creator, gas: 200000})
-    txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`submitOffer failed with status ${txStatus}`)
-        return
-    }
-    let offer2ID = parseInt(offer2TransactionResult.events!.OfferAdded.returnValues.offerID)
-    try {
-        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer2ID, offer2Extra).send({from: offerer2Creator, gas: 1000000, value: "5"})
-    } catch (e) {
-        console.error(`submitOfferArrayExtra failed with error ${e}`)
-        return
-    }
-    console.log(`New offer with extra [${offer2Extra}] and ID ${offer2ID} created! 💰💰💰`)
-    pendingOffers.add(offer2ID)
+//     let offer2Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY2").substr(2).padStart(64, "0"), "0x" + web3MarketplaceInstance.utils.toHex("AUTH-KEY2").substr(2).padStart(64, "0")]
+//     console.log(`Creating test offer 2 with extra [${offer2Extra}]...`)
+//     let offer2TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer2Creator, gas: 200000})
+//     txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+//     if (txStatus != 0) {
+//         console.error(`submitOffer failed with status ${txStatus}`)
+//         return
+//     }
+//     let offer2ID = parseInt(offer2TransactionResult.events!.OfferAdded.returnValues.offerID)
+//     try {
+//         await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer2ID, offer2Extra).send({from: offerer2Creator, gas: 1000000, value: "5"})
+//     } catch (e) {
+//         console.error(`submitOfferArrayExtra failed with error ${e}`)
+//         return
+//     }
+//     console.log(`New offer with extra [${offer2Extra}] and ID ${offer2ID} created! 💰💰💰`)
+//     pendingOffers.add(offer2ID)
 
-    let offer3Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY3").substr(2).padStart(64, "0"), "0x" + web3MarketplaceInstance.utils.toHex("AUTH-KEY3").substr(2).padStart(64, "0")]
-    console.log(`Creating test offer 3 with extra [${offer3Extra}]...`)
-    let offer3TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer3Creator, gas: 200000})
-    txStatus = parseInt(newRequestTransactionResult.events!.FunctionStatus.returnValues.status)
-    if (txStatus != 0) {
-        console.error(`submitOffer failed with status ${txStatus}`)
-        return
-    }
-    let offer3ID = parseInt(offer3TransactionResult.events!.OfferAdded.returnValues.offerID)
-    try {
-        await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer3ID, offer3Extra).send({from: offerer3Creator, gas: 1000000, value: "9"})
-    } catch (e) {
-        console.error(`submitOfferArrayExtra failed with error ${e}`)
-        return
-    }
-    console.log(`New offer with extra [${offer3Extra}] and ID ${offer3ID} created! 💰💰💰`)
-    pendingOffers.add(offer3ID)
+//     let offer3Extra = [1, 5, 0, "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY3").substr(2).padStart(64, "0"), "0x" + web3MarketplaceInstance.utils.toHex("AUTH-KEY3").substr(2).padStart(64, "0")]
+//     console.log(`Creating test offer 3 with extra [${offer3Extra}]...`)
+//     let offer3TransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerer3Creator, gas: 200000})
+//     txStatus = parseInt(newRequestTransactionResult.events!.FunctionStatus.returnValues.status)
+//     if (txStatus != 0) {
+//         console.error(`submitOffer failed with status ${txStatus}`)
+//         return
+//     }
+//     let offer3ID = parseInt(offer3TransactionResult.events!.OfferAdded.returnValues.offerID)
+//     try {
+//         await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offer3ID, offer3Extra).send({from: offerer3Creator, gas: 1000000, value: "9"})
+//     } catch (e) {
+//         console.error(`submitOfferArrayExtra failed with error ${e}`)
+//         return
+//     }
+//     console.log(`New offer with extra [${offer3Extra}] and ID ${offer3ID} created! 💰💰💰`)
+//     pendingOffers.add(offer3ID)
     
-    console.log(`Closing and deciding request ${requestID} by selecting ${[offer1ID, offer2ID]} as winning offers...`)
-    let requestDecisionTransactionResults = await SMAUGMarketplaceInstance.methods.decideRequest(requestID, [offer1ID, offer2ID]).send({from: requestCreator, gas: 2000000})
-    if (requestDecisionTransactionResults.events!.RequestDecided == undefined) {
-        console.error("Request decision failed.")
-        return
-    }
-    console.log("Request decision process succesfully completed! 💵💵💵")
-}
+//     console.log(`Closing and deciding request ${requestID} by selecting ${[offer1ID, offer2ID]} as winning offers...`)
+//     let requestDecisionTransactionResults = await SMAUGMarketplaceInstance.methods.decideRequest(requestID, [offer1ID, offer2ID]).send({from: requestCreator, gas: 2000000})
+//     if (requestDecisionTransactionResults.events!.RequestDecided == undefined) {
+//         console.error("Request decision failed.")
+//         return
+//     }
+//     console.log("Request decision process succesfully completed! 💵💵💵")
+// }

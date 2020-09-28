@@ -3,22 +3,29 @@
     "postinstall": "npm run generateWeb3Types",
     "generateWeb3Types": "npx typechain --target=web3-v1 'config/abi/*.json'",
     "demo": "ts-node ./src/main.ts",
-    "demo:default": "ts-node ./src/main.ts --marketplace-address 0x51Cdd045E893528fB7C6F2DCEB07Efa9eb2FB375 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.0.1:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46",
+    "demo:default": "ts-node ./src/main.ts --marketplace-address 0x51Cdd045E893528fB7C6F2DCEB07Efa9eb2FB375 --backend-url http://127.0.0.1:61234 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.0.1:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46",
     "watch": "npx tsc -w"
   },
   "dependencies": {
+    "append-query": "^2.1.0",
     "inquirer": "^7.1.0",
     "js-yaml": "^3.13.1",
-    "web3": "^1.2.8",
-    "yargs": "^15.3.1",
+    "node-fetch": "^2.6.1",
     "ts-node": "^8.10.1",
     "typechain": "^2.0.0",
-    "typescript": "^3.9.3"
+    "typescript": "^3.9.3",
+    "url-join": "^4.0.1",
+    "wait-for-enter": "^1.0.0",
+    "web3": "^1.2.8",
+    "yargs": "^15.3.1"
   },
   "devDependencies": {
     "@typechain/web3-v1": "^1.0.0",
+    "@types/append-query": "^2.0.0",
     "@types/inquirer": "^6.5.0",
     "@types/js-yaml": "^3.12.4",
+    "@types/node-fetch": "^2.5.7",
+    "@types/url-join": "^4.0.0",
     "@types/yargs": "^15.0.5"
   }
 }
