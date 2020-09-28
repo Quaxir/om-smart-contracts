@@ -23,10 +23,10 @@ main().catch(error => {
 })
 
 var web3MarketplaceInstance: Web3
-var marketplaceOwner: string
 var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
 
+var openRequests: Set<number>
 var pendingOffers: Set<number>
 var unseenOfferFulfilledEvents: OfferFulfilled[]
 var unseenOfferUnFulfilledEvents: OfferClaimable[]
@@ -38,45 +38,34 @@ async function main() {
                         .option("a", {alias: "marketplace-abi-path", describe: "The path to the ABI of the marketplace to interact with.", type: "string", demandOption: true})
                         .option("b", {alias: "backend-url", describe: "The URL of the marketplace backend.", type: "string", demandOption: true})
                         .option("n", {alias: "ethereum-address", describe: "The address of the marketplace Ethereum instance.", type: "string", demandOption: true})
-                        .option("o", {alias: "marketplace-owner", describe: "The address of the owner of the marketplace smart contract.", type: "string", demandOption: true})
                         .argv
-
-    web3MarketplaceInstance = new Web3(options.n)
-    let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
-    SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(options.a).toString()), options.c) as any) as SMAUGMarketplace
-
-    if(!Web3.utils.isAddress(options.o)) {
-        throw Error("Owner address is not a valid address format.")
-    }
-    marketplaceOwner = options.o
 
     try {
         backendURL = new URL(options.b)
     } catch {
         throw Error("Marketplace URL is not a valid URL.")
-    }    
+    }
 
-    console.log(`Arguments used:\n
-        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.b}\n
-        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.c}\n
-        - MARKETPLACE BACKEND ADDRESS: ${options.b}
-    `)
+    web3MarketplaceInstance = new Web3(options.n)
+    SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(options.a).toString()), options.c) as any) as SMAUGMarketplace
 
-    console.log("Available accounts:")
-    let accounts = await web3MarketplaceInstance.eth.getAccounts()
-    let balances = await Promise.all(accounts.map(async (account) => {
-        return await web3MarketplaceInstance.eth.getBalance(account)
-    }))
-    console.log(accounts.map((account, index) => {
-        return `${account} - ${balances[index]} wei`
-    }))
+    printArgumentsDetails(options)
 
+    openRequests = new Set()
     pendingOffers = new Set()
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
 
     configureEventListener(false)
     await handleUserInput()
+}
+
+function printArgumentsDetails(options: any) {
+    console.log(`Arguments used:\n
+        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.n}\n
+        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.c}\n
+        - MARKETPLACE BACKEND ADDRESS: ${options.b}
+    `)
 }
 
 function configureEventListener(debug: boolean = false) {
@@ -111,35 +100,37 @@ function configureEventListener(debug: boolean = false) {
 
 async function handleUserInput(): Promise<void> {
     while (true) {
-        printNewOffersFulfilled()
-        
         let answers = await inquirer.prompt([
             {
                 type: "list",
                 name: "choice", message: "What would you like to do?",
                 choices: [
                     {
-                        name: "1) Create auction-only request",
+                        name: "1) List accounts and balances",
+                        value: "listAccountBalances"
+                    },
+                    {
+                        name: "2) Create instant-rent request",
                         value: "createRequest"
                     },
                     {
-                        name: "2) Create offer",
+                        name: "3) Create offer",
                         value: "createOffer"
                     },
                     {
-                        name: "3) Decide request",
+                        name: "4) Decide request",
                         value: "decideRequest"
                     },
                     {
-                        name: "4) Automatically create and decide request",
+                        name: "5) Automatically create and decide request",
                         value: "automaticLifeCycle"
                     },
                     {
-                        name: "5) Check for new acess tokens issued",
+                        name: "6) Check for new acess tokens issued",
                         value: "checkForOffersEvents"
                     },
                     {
-                        name: "6) Exit",
+                        name: "7) Exit",
                         value: "exit"
                     }
                 ]
@@ -147,6 +138,8 @@ async function handleUserInput(): Promise<void> {
         ])
 
         switch (answers.choice) {
+            case "listAccountBalances":
+                await printAccountsAndBalances(web3MarketplaceInstance); break;
             case "createRequest": {
                 await handleRequestCreation(); break;
             }
@@ -169,58 +162,43 @@ async function handleUserInput(): Promise<void> {
     }
 }
 
-function printNewOffersFulfilled(force: boolean = false) {
-    if (unseenOfferFulfilledEvents.length > 0) {
-        console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
-        unseenOfferFulfilledEvents.forEach((offer, index) => {
-            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID} - token: ${offer.returnValues.token}`)
-        })
-        unseenOfferFulfilledEvents = []
-    } else if (force) {     //unseenOfferFulfilledEvents.length == 0
-        console.log("No new offers have been fulfilled!")
-    }
-}
+async function printAccountsAndBalances(web3Instance: Web3) {
+    let accounts = await web3MarketplaceInstance.eth.getAccounts()
+    let balances = await Promise.all(accounts.map(async (account) => {
+        return await web3MarketplaceInstance.eth.getBalance(account)
+    }))
 
-function printNewOffersUnfulfilled(force: boolean = false) {
-    if (unseenOfferUnFulfilledEvents.length > 0) {
-        console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
-        unseenOfferUnFulfilledEvents.forEach((offer, index) => {4
-            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
-        })
-        unseenOfferUnFulfilledEvents = []
-    } else if (force) {     //unseenOfferUnFulfilledEvents.length == 0
-        console.log("No new offers have not been fulfilled!")
-    }
+    let output = accounts.map((account, index) => {
+        return `${account} - ${balances[index]} wei`
+    })
+
+    console.log(output)
 }
 
 async function handleRequestCreation(): Promise<void> {
     const requestDetails = await inquirer.prompt(getRequestCreationQuestions())
     console.log(`Creating request using Ethereum address: ${requestDetails.creatorAccount}...`)
 
-    console.log("Requesting new access token from marketplace backend...")
     let backendEndpoint = urljoin(backendURL.toString(), "api", "marketplace", "gettoken")
     backendEndpoint = appendQuery(backendEndpoint, {ethereum_address: requestDetails.creatorAccount})
-    console.log(`Backend endpoint queried: ${backendEndpoint}`)
+    console.log(`Requesting new access token from marketplace backend at ${backendEndpoint}...`)
 
     let requestCreationTokenResponse = await fetch(backendEndpoint)
     let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
     console.log("Request token obtained from backend:")
     // Hard-coded values, but it works
     console.log(requestCreationToken)
+    console.log()
     console.log("Token content decoded:")
-    console.log({
-        nonce: "0x" + (requestCreationToken.encoded as string).substr(2, 64),
-        methodSelector: "0x" + (requestCreationToken.encoded as string).substr(66, 8),
-        requestCreatorAddress: "0x" + (requestCreationToken.encoded as string).substr(74, 40),
-        contractAddress: "0x" + (requestCreationToken.encoded as string).substr(114)
-    })
+    console.log(getTokenDetails(requestCreationToken.encoded))
 
     await utils.waitForEnter()
     
     // Create request
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, new Date(requestDetails.requestDeadline).getTime() / 1000).send({from: requestDetails.creatorAccount, gas: 200000})
-    console.log("Request creation transaction result:")
-    console.log(newRequestTransactionResult)
+    const deadlineInMilliseconds = new Date(requestDetails.requestDeadline).getTime() / 1000
+    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline} (${deadlineInMilliseconds} s in UNIX epoch)...`)
+
+    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInMilliseconds).send({from: requestDetails.creatorAccount, gas: 200000})
 
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -228,27 +206,37 @@ async function handleRequestCreation(): Promise<void> {
         return
     }
     let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
-    console.log(`Request created with ID ${requestID}.`)
+    console.log(`New request created with ID ${requestID}.`)
 
     await utils.waitForEnter()
     
     // Create request extra
-    let requestExtra = [new Date(requestDetails.requestStartingTime).getTime() / 1000, requestDetails.requestDuration, requestDetails.minAuctionPrice, requestDetails.lockerID]
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 200000})
-    console.log("Request extra submission transaction result:")
-    console.log(newRequestExtraTransactionResult)
+    const startTimeInMilliseconds = new Date(requestDetails.requestStartingTime).getTime() / 1000
+
+    let requestExtra = [startTimeInMilliseconds, requestDetails.requestDuration, requestDetails.minAuctionPrice]
+    let instantRulesFormatted = getFormattedInstantRules(requestDetails.instantRules)
+    requestExtra = requestExtra.concat(instantRulesFormatted)
+    requestExtra.push(requestDetails.lockerID)
+
+    console.log(`Adding request extra to request with ID ${requestID}...`)
+    console.log("Request extra:")
+    console.log(requestExtra)
+
+    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 1000000})
+
     txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        console.error(`Request creation failed with status ${txStatus}`)
+        console.error(`Request extra submission failed with status ${txStatus}`)
         return
     }
 
-    await utils.waitForEnter()
-
+    openRequests.add(requestID)
     console.log("Request creation complete!")
+
+    await utils.waitForEnter()
 }
 
-// Expected answers from these questions are {requestDeadline: string, requestStartingTime: string, requestDuration: string, minAuctionPrice: string, lockerID: string, creatorAccount: string}
+// Expected answers from these questions are {requestDeadline: datetime, requestStartingTime: datetime, requestDuration: string, minAuctionPrice: string, lockerID: string, creatorAccount: string}
 function getRequestCreationQuestions(): inquirer.QuestionCollection {
     return [
         {
@@ -256,19 +244,15 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             name: "requestDeadline",
             message: "Request deadline",
             validate: (input) => {
-                try {
-                    let datetime = new Date(input)
-                    if (isNaN(datetime.getTime())) {
-                        return "Not a valid date."
-                    }
-                    let secondsSinceEpoch = datetime.getTime() / 1000
-                    if (secondsSinceEpoch < new Date().getTime() / 1000) {
-                        return "Deadline must not be already past."
-                    }
-                    return true
-                } catch {
-                    return "Value is not a number."
+                let datetime = new Date(input).getTime()
+                if (isNaN(datetime)) {
+                    return "Not a valid date."
                 }
+                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                    return "Deadline must not be already past."
+                }
+                return true
             }
         },
         {
@@ -276,19 +260,15 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             name: "requestStartingTime",
             message: "Request starting time",
             validate: (input) => {
-                try {
-                    let datetime = new Date(input)
-                    if (isNaN(datetime.getTime())) {
-                        return "Not a valid date."
-                    }
-                    let secondsSinceEpoch = datetime.getTime() / 1000
-                    if (secondsSinceEpoch < new Date().getTime() / 1000) {
-                        return "Deadline must not be already past."
-                    }
-                    return true
-                } catch {
-                    return "Value is not a number."
+                let datetime = new Date(input).getTime()
+                if (isNaN(datetime)) {
+                    return "Not a valid date."
                 }
+                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                    return "Starting time must not be already past."
+                }
+                return true
             }
         },
         {
@@ -309,7 +289,7 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
         {
             type: "input",
             name: "minAuctionPrice",
-            message: "Minimum price/minute for auction",
+            message: "Starting price/minute value for auction",
             validate: (input) => {
                 try {
                     if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
@@ -320,6 +300,25 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
                     return "Value is not a number."
                 }
             }            
+        },
+        {
+            type: "input",
+            name: "instantRules",
+            message: "Instant rent rules (in array format). Enter -1 to only allow auction-based offers",
+            validate: (input: string) => {
+                if (input === "-1") {
+                    return true;
+                }
+
+                let cleanedInput = input.substring(1, input.length-1)
+                let values = cleanedInput.split(",")
+                if (values.filter((value) => {              // Check if there's any value that cannot be parsed as an integer
+                    return !parseInt(value)
+                }).length > 0) {
+                    return "Some values are not valid numbers."
+                }
+                return true
+            }
         },
         {
             type: "input",
@@ -348,6 +347,27 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             }
         }
     ] as inquirer.QuestionCollection
+}
+
+function getTokenDetails(tokenEncoded: string): utils.MarketplaceAccessTokenComponents {
+    const nonceLength = 64
+    const selectorLength = 8
+    const addressLength = 40
+
+    let startIndex = 2
+    return {
+        nonce: "0x" + tokenEncoded.substr(startIndex, nonceLength),
+        methodSelector: "0x" + tokenEncoded.substr(startIndex+nonceLength, selectorLength),
+        requestCreatorAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength, addressLength),
+        contractAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength+addressLength)
+    }
+}
+
+function getFormattedInstantRules(details: string): number[] {
+    if (details == "-1") {
+        return []
+    }
+    return details.substring(1, details.length-1).split(",").map(value => parseInt(value))
 }
 
 // Automatically creates an auction offer (no instant-rent offer for the demo purposes)
@@ -528,6 +548,30 @@ function getRequestDecisionQuestions(): inquirer.QuestionCollection {
             }            
         }
     ] as inquirer.QuestionCollection
+}
+
+function printNewOffersFulfilled(force: boolean = false) {
+    if (unseenOfferFulfilledEvents.length > 0) {
+        console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
+        unseenOfferFulfilledEvents.forEach((offer, index) => {
+            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID} - token: ${offer.returnValues.token}`)
+        })
+        unseenOfferFulfilledEvents = []
+    } else if (force) {     //unseenOfferFulfilledEvents.length == 0
+        console.log("No new offers have been fulfilled!")
+    }
+}
+
+function printNewOffersUnfulfilled(force: boolean = false) {
+    if (unseenOfferUnFulfilledEvents.length > 0) {
+        console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
+        unseenOfferUnFulfilledEvents.forEach((offer, index) => {4
+            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
+        })
+        unseenOfferUnFulfilledEvents = []
+    } else if (force) {     //unseenOfferUnFulfilledEvents.length == 0
+        console.log("No new offers have not been fulfilled!")
+    }
 }
 
 // async function createAndDecideTestRequest() {
