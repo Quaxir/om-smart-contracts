@@ -594,12 +594,12 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         private view returns (uint minimumPriceToPay) {
             for (uint i = 0; i < rules.length; i++) {
                 if (rules[i].minimumNumberOfMinutes >= offerDuration) {
-                    return rules[i].minimumPricePerMinute;
+                    return rules[i].minimumPricePerMinute * offerDuration;
                 }
             }
 
             //If offer duration is greater than anything specified in request rules, return the last value
-            return rules[rules.length-1].minimumPricePerMinute;
+            return rules[rules.length-1].minimumPricePerMinute * offerDuration;
     }
 
     /**
