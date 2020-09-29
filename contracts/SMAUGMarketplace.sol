@@ -522,7 +522,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
 
             // The offer must finish earlier than the request
             require(
-                offerExtra.startOfRentTime + offerExtra.duration <= requestExtra.startOfRentTime + requestExtra.duration,
+                offerExtra.startOfRentTime + offerExtra.duration*60 <= requestExtra.startOfRentTime + requestExtra.duration*60,
                 UtilsLibrary.stringifyStatusCode(OfferExtraInvalid)
             );
 
@@ -605,7 +605,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
     /**
     @notice Returns the extra information for an offer.
     @param offerIdentifier The ID of the offer.
-    @return The status code of the operation and the detais (startOfRentTime, duration, offerType, priceOffered, offerCreatorEncryptionKey, offerCreatorAuthenticationKey) associated with the given request identifier.
+    @return The status code of the operation and the details (startOfRentTime, duration, offerType, priceOffered, offerCreatorEncryptionKey, offerCreatorAuthenticationKey) associated with the given request identifier.
     */
     function getOfferExtra(uint offerIdentifier)
     public view returns (uint8 status, uint startOfRentTime, uint duration, OfferType offerType, uint priceOffered, uint offerCreatorEncryptionKey, uint offerCreatorAuthenticationKey) {
