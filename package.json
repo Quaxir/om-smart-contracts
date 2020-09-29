@@ -18,6 +18,7 @@
     },
     "dependencies": {
         "@openzeppelin/contracts": "^2.5.0",
+        "eth-crypto": "^1.8.0",
         "sofie-interledger-contracts": "^0.3.0",
         "sofie-offer-marketplace": "^0.1.0"
     },

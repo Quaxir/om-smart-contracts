@@ -12,8 +12,9 @@ export interface MarketplaceAccessTokenComponents {
     contractAddress: string
 }
 
-export async function waitForEnter() {
+export async function waitForEnter(message?: string) {
     const waitForEnter = require("wait-for-enter");
-    console.log("Press Enter to continue...")
+    message = message || "Press Enter to continue..."
+    console.log(message)
     await waitForEnter()
 }

@@ -13,6 +13,7 @@ import { request } from "http"
 import appendQuery from "append-query"
 import urljoin from "url-join"
 import { util } from "chai"
+import EthCrypto from "eth-crypto"
 
 main().catch(error => {
     console.error(error)
@@ -114,7 +115,7 @@ async function handleUserInput(): Promise<void> {
                         value: "createRequest"
                     },
                     {
-                        name: "3) Create offer",
+                        name: "3) Create instant-rent offer",
                         value: "createOffer"
                     },
                     {
@@ -196,6 +197,7 @@ async function handleRequestCreation(): Promise<void> {
     
     // Create request
     const deadlineInMilliseconds = new Date(requestDetails.requestDeadline).getTime() / 1000
+    const durationInMinutes = requestDetails.requestDuration * 60
     console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline} (${deadlineInMilliseconds} s in UNIX epoch)...`)
 
     let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInMilliseconds).send({from: requestDetails.creatorAccount, gas: 200000})
@@ -213,7 +215,7 @@ async function handleRequestCreation(): Promise<void> {
     // Create request extra
     const startTimeInMilliseconds = new Date(requestDetails.requestStartingTime).getTime() / 1000
 
-    let requestExtra = [startTimeInMilliseconds, requestDetails.requestDuration, requestDetails.minAuctionPrice]
+    let requestExtra = [startTimeInMilliseconds, durationInMinutes, requestDetails.minAuctionPrice]
     let instantRulesFormatted = getFormattedInstantRules(requestDetails.instantRules)
     requestExtra = requestExtra.concat(instantRulesFormatted)
     requestExtra.push(requestDetails.lockerID)
@@ -370,31 +372,52 @@ function getFormattedInstantRules(details: string): number[] {
     return details.substring(1, details.length-1).split(",").map(value => parseInt(value))
 }
 
-// Automatically creates an auction offer (no instant-rent offer for the demo purposes)
 async function handleOfferCreation(): Promise<void> {
     const offerDetails = await inquirer.prompt(getOfferCreationQuestions())
-    console.log("Creating offer...")
 
     // Create offer
+    console.log(`Creating offer using Ethereum address: ${offerDetails.creatorAccount}...`)
     let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(offerDetails.requestID).send({from: offerDetails.creatorAccount, gas: 200000})
+
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         console.error(`Offer creation failed with status ${txStatus}`)
         return
     }
     let offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as number
+    console.log(`New offer created with ID ${offerID}`)
+
+    await utils.waitForEnter("Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
+
+    const newIdentity = EthCrypto.createIdentity()
+    console.log({private: newIdentity.privateKey, public: newIdentity.publicKey})
+
+    await utils.waitForEnter()
     
     // Create offer extra
-    let offerType = 0           // Offer is an auction one (no instant rent)
-    let offerExtra = [offerDetails.offerStartingTime, offerDetails.offerDuration, offerType, Web3.utils.toHex(offerDetails.creatorEncryptionKey), Web3.utils.toHex(offerDetails.creatorAuthKey)]
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: `${offerDetails.offerPrice}`})
-    txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`Offer creation failed with status ${txStatus}`)
-        return
+    const offerType = 1           // Offer is an auction one (no instant rent)
+    const startTimeInMillisecond = new Date(offerDetails.offerStartingTime).getTime() / 1000
+
+    let offerExtra = [startTimeInMillisecond, offerDetails.offerDuration, offerType, Web3.utils.toBN(newIdentity.publicKey)]
+
+    console.log(`Adding offer extra to offer with ID ${offerID}...`)
+    console.log("Offer extra:")
+    console.log(offerExtra)
+
+    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: offerDetails.offerPrice})
+
+    if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
+        // All good
+        pendingOffers.add(offerID)
+        console.log("Offer created!")
+    } else {
+        txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
+        if (txStatus != 0) {
+            console.error(`Offer creation failed with status ${txStatus}`)
+            return
+        }
     }
-    console.log(`Offer created with ID ${offerID}! 💰💰💰`)
-    pendingOffers.add(offerID)
+    await utils.waitForEnter()
 }
 
 // Expected answers from these questions are {requestID: string, offerStartingTime: string, offerDuration: string, pricePerMinute: string, creatorEncryptionKey: string, creatorAuthKey: string, creatorAccount: string}
@@ -420,20 +443,21 @@ function getOfferCreationQuestions(): inquirer.QuestionCollection {
             name: "offerStartingTime",
             message: "Offer starting time",
             validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
+                let datetime = new Date(input).getTime()
+                if (isNaN(datetime)) {
+                    return "Not a valid date."
                 }
-            }            
+                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                    return "Starting time must not be already past."
+                }
+                return true
+            }
         },
         {
             type: "input",
             name: "offerDuration",
-            message: "Offer duration",
+            message: "Offer duration (in minutes)",
             validate: (input) => {
                 try {
                     if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
@@ -460,28 +484,28 @@ function getOfferCreationQuestions(): inquirer.QuestionCollection {
                 }
             }            
         },
-        {
-            type: "string",
-            name: "creatorEncryptionKey",
-            message: "Offer creator encryption key",
-            validate: (input) => {
-                if (!Web3.utils.isHex(input)) {
-                    return true
-                }
-                return "Value must be a UTF-8 string, not HEX."
-            }
-        },
-        {
-            type: "input",
-            name: "creatorAuthKey",
-            message: "Offer creator authentication key",
-            validate: (input) => {
-                if (!Web3.utils.isHex(input)) {
-                    return true
-                }
-                return "Value must be a UTF-8 string, not HEX."
-            }
-        },
+        // {
+        //     type: "string",
+        //     name: "creatorEncryptionKey",
+        //     message: "Offer creator encryption key",
+        //     validate: (input) => {
+        //         if (!Web3.utils.isHex(input)) {
+        //             return true
+        //         }
+        //         return "Value must be a UTF-8 string, not HEX."
+        //     }
+        // },
+        // {
+        //     type: "input",
+        //     name: "creatorAuthKey",
+        //     message: "Offer creator authentication key",
+        //     validate: (input) => {
+        //         if (!Web3.utils.isHex(input)) {
+        //             return true
+        //         }
+        //         return "Value must be a UTF-8 string, not HEX."
+        //     }
+        // },
         {
             type: "input",
             name: "creatorAccount",
