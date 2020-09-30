@@ -184,7 +184,9 @@ async function handleRequestCreation(): Promise<void> {
     console.log("Request token obtained from backend:")
     // Hard-coded values, but it works
     console.log(requestCreationToken)
-    console.log()
+
+    await utils.waitForEnter()
+
     console.log("Token content decoded:")
     console.log(getTokenDetails(requestCreationToken.encoded))
 
@@ -193,7 +195,7 @@ async function handleRequestCreation(): Promise<void> {
     // Create request
     const deadlineInSeconds = new Date(requestDetails.requestDeadline).getTime() / 1000
     const durationInMinutes = requestDetails.requestDuration * 60
-    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline} (${deadlineInSeconds} s in UNIX epoch)...`)
+    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
 
     let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInSeconds).send({from: requestDetails.creatorAccount, gas: 200000})
 
@@ -529,23 +531,23 @@ async function createTestRequest(): Promise<number> {
     const requestLockerID = 1434123
     const requestCreator = (await web3MarketplaceInstance.eth.getAccounts())[1]
 
-    console.log(`Creating automated request using Ethereum address: ${requestCreator}...`)
-
     const backendEndpoint = getBackendEndpoint(requestCreator)
-    console.log(`Requesting new access token from marketplace backend at ${backendEndpoint}...`)
+    console.log(`1) Requesting new access token from marketplace backend at ${backendEndpoint}...`)
 
     let requestCreationTokenResponse = await fetch(backendEndpoint)
     let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
     console.log("Request token obtained from backend:")
     // Hard-coded values, but it works
     console.log(requestCreationToken)
-    console.log()
+    
+    await utils.waitForEnter()
+
     console.log("Token content decoded:")
     console.log(getTokenDetails(requestCreationToken.encoded))
 
     await utils.waitForEnter()
     
-    console.log(`Creating automated request for ${requestCreator} with deadline: ${requestDeadline} (${requestDeadlineSeconds} s in UNIX epoch)...`)
+    console.log(`2) Creating automated request for ${requestCreator} with deadline: ${requestDeadline.toUTCString()} (${requestDeadlineSeconds} s in UNIX epoch)...`)
 
     let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDeadlineSeconds).send({from: requestCreator, gas: 200000})
 
@@ -562,9 +564,8 @@ async function createTestRequest(): Promise<number> {
     let requestExtra = [requestStartSeconds, requestDurationMinutes, requestAuctionPrice].concat(requestInstantRentRules)
     requestExtra.push(requestLockerID)
 
-    console.log(`Adding automatic request extra to request with ID ${requestID}...`)
-    console.log("Request extra:")
-    console.log(requestExtra)
+    console.log(`3) Adding request extra to request with ID ${requestID}...`)
+    console.log(`Starting time: ${requestStart.toUTCString()}\nDuration (in minutes/hours/days): ${requestDurationMinutes}/${requestDurationMinutes/60}/${requestDurationMinutes/(60*24)}\nCreator: ${requestCreator}\nLocker ID: ${requestLockerID}`)
 
     let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestCreator, gas: 1000000})
 
@@ -587,7 +588,7 @@ async function createTestOffer(requestID: number): Promise<number> {
 
     const offerCreator = (await web3MarketplaceInstance.eth.getAccounts())[9]
 
-    console.log(`Creating offer using Ethereum address: ${offerCreator}...`)
+    console.log(`4) Creating offer using Ethereum address: ${offerCreator}...`)
     let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerCreator, gas: 200000})
 
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
@@ -598,24 +599,17 @@ async function createTestOffer(requestID: number): Promise<number> {
     let offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as number
     console.log(`New offer created with ID ${offerID}`)
 
-    await utils.waitForEnter("Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
+    await utils.waitForEnter("5) Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
 
     const newIdentity = await web3MarketplaceInstance.eth.accounts.create()
     console.log({private: newIdentity.privateKey, public: newIdentity.address})
 
     await utils.waitForEnter()
 
-    // const key1 = "0x" + newIdentity.address.substr(2).padStart(64, "0")
-    // const key2 = "0x" + web3MarketplaceInstance.utils.toHex("ENC-KEY1").substr(2).padStart(64, "0")
-
-    // console.log(key1)
-    // console.log(key2)
-
     let offerExtra = [offerStartingTimeSeconds, offerDurationMinutes, offerType, "0x" + newIdentity.address.substr(2).padStart(64, "0")] as any[]
 
-    console.log(`Adding offer extra to offer with ID ${offerID}...`)
-    console.log("Offer extra:")
-    console.log(offerExtra)
+    console.log(`5) Adding offer extra to offer with ID ${offerID}...`)
+    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nCreator: ${offerCreator}\nJWT encryption key: ${newIdentity.address}`)
 
     let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount})
 
