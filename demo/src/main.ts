@@ -72,6 +72,7 @@ function configureEventListener(debug: boolean = false) {
         console.log("Configuring event listener...")
     }
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
+        console.log(`\nEvent ${event.event} received!`)
         if (debug) {
             console.log(event)
         }
@@ -88,7 +89,6 @@ function configureEventListener(debug: boolean = false) {
             let requestID = parseInt(castedEvent.returnValues.requestID)
             openRequests.delete(requestID)
         }
-        console.log(`Event ${event.event} handled!`)
     })
     if (debug) {
         console.log("Event listener configured.")
