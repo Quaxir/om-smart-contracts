@@ -30,7 +30,7 @@ if [[ $? == 0 ]]; then
 fi
 
 echo "Calling reset script first..."
-source ./reset_blockchain_state
+./reset_blockchain_state
 
 # Create the Docker container
 DOCKER_CONTAINER_ID_OR_ERROR=$(docker run -tid --name "$CONTAINER_NAME" -v $STATE_DIR:/data -p $HOST_PORT:8545 --rm --network "$ETHEREUM_NETWORK_NAME" --network-alias $CONTAINER_NETWORK_ALIAS trufflesuite/ganache-cli --db /data --debug --verbose --allowUnlimitedContractSize --mnemonic "main blouse fashion brand own rocket fluid notable vacuum gain guitar leaf" -i 666 2>&1)

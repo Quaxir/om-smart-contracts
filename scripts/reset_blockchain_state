@@ -4,11 +4,14 @@ PARENT_DIRECTORY="${PWD%/*}"
 STATE_DIR="marketplace_state"
 STATE_DIR_PATH="$PARENT_DIRECTORY/$STATE_DIR"
 
-if [ -d "$DIR" ]; then
+echo "Checking if state there is a state directory at $STATE_DIR_PATH..."
+
+if [ ! -d "$STATE_DIR_PATH" ]; then
     echo "State directory does not exist. No need to reset state."
     exit 0
 fi
 
+echo "State directory found. Updating block number..."
 cd $STATE_DIR_PATH
 LAST_BLOCK_ID_LINE=$(ls -1Alt | grep -Eo "\!blocks\!([0-9]*)$" | head -n 1)
 LAST_BLOCK_ID=$(echo $LAST_BLOCK_ID_LINE | grep -oE "\d+")
@@ -17,7 +20,9 @@ echo "Last block ID saved in state: $LAST_BLOCK_ID"
 LAST_BLOCK_LOG_INFO_FILE="!blockLogs!length"
 LAST_BLOCK_INFO_FILE="!blocks!length"
 
-echo $LAST_BLOCK_ID > "$LAST_BLOCK_LOG_INFO_FILE"
-echo $LAST_BLOCK_ID > "$LAST_BLOCK_INFO_FILE"
+echo "Updating $LAST_BLOCK_LOG_INFO_FILE in $STATE_DIR_PATH/$LAST_BLOCK_LOG_INFO_FILE..."
+echo $((LAST_BLOCK_ID+1)) > "$STATE_DIR_PATH/$LAST_BLOCK_LOG_INFO_FILE"
+echo "Updating $LAST_BLOCK_INFO_FILE in $STATE_DIR_PATH/$LAST_BLOCK_INFO_FILE..."
+echo $(($LAST_BLOCK_ID+1)) > "$STATE_DIR_PATH/$LAST_BLOCK_INFO_FILE"
 
 echo "Blockchain state reset according to block info."
