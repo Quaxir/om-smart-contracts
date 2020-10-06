@@ -106,28 +106,32 @@ async function handleUserInput(): Promise<void> {
                         name: "1) List accounts and balances",
                         value: "listAccountBalances"
                     },
+                    // {
+                    //     name: "2) Create instant-rent request",
+                    //     value: "createRequest"
+                    // },
+                    // {
+                    //     name: "3) Create instant-rent offer",
+                    //     value: "createOffer"
+                    // },
+                    // {
+                    //     name: "4) List open requests",
+                    //     value: "listRequests"
+                    // },
                     {
-                        name: "2) Create instant-rent request",
-                        value: "createRequest"
-                    },
-                    {
-                        name: "3) Create instant-rent offer",
-                        value: "createOffer"
-                    },
-                    {
-                        name: "4) Create test instant-rent request and offer",
+                        name: "2) Create test instant-rent request and offer",
                         value: "createTestInteractions"
                     },
                     {
-                        name: "5) Claim money from request creators",
+                        name: "3) Claim money from request creators",
                         value: "moveMoney"
                     },
                     {
-                        name: "6) Check for new acess tokens issued",
+                        name: "4) Check for new acess tokens issued",
                         value: "checkForOffersEvents"
                     },
                     {
-                        name: "7) Check events emitted since last time",
+                        name: "5) Check events emitted since last time",
                         value: "checkForPendingEvents"
                     },
                     {
@@ -206,9 +210,10 @@ async function handleRequestCreation(): Promise<void> {
     await utils.waitForEnter()
     
     // Create request
-    const deadlineInSeconds = new Date(requestDetails.requestDeadline).getTime() / 1000
+    const deadline = new Date(requestDetails.requestDeadline)
+    const deadlineInSeconds = deadline.getTime() / 1000
     const durationInMinutes = requestDetails.requestDuration * 60
-    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
+    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${deadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
 
     let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInSeconds).send({from: requestDetails.creatorAccount, gas: 200000, gasPrice: "1"})
 
