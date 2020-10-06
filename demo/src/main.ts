@@ -1,19 +1,18 @@
 import Web3 from "web3"
 import fs from "fs"
+import BN from "bn.js"
 
 import { SmaugMarketPlace as SMAUGMarketplace, OfferFulfilled, OfferClaimable, RequestDecided } from "../types/web3-v1-contracts/SMAUGMarketPlace"
 
 import * as utils from "./utils"
 import yargs from "yargs"
 import inquirer, { QuestionCollection } from "inquirer"
-import { EventEmitter } from "events"
 import { URL } from "url"
 import fetch from "node-fetch"
-import { request } from "http"
 import appendQuery from "append-query"
 import urljoin from "url-join"
+import { EventLog } from "web3-core/types"
 import { util } from "chai"
-import EthCrypto from "eth-crypto"
 
 main().catch(error => {
     console.error(error)
@@ -28,6 +27,7 @@ var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
 
 var openRequests: Set<number>
+var unseenEvents: EventLog[]
 var unseenOfferFulfilledEvents: OfferFulfilled[]
 var unseenOfferUnFulfilledEvents: OfferClaimable[]
 
@@ -51,11 +51,12 @@ async function main() {
 
     printArgumentsDetails(options)
 
+    unseenEvents = []
     openRequests = new Set()
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
 
-    configureEventListener(true)
+    configureEventListener(false)
     await handleUserInput()
 }
 
@@ -72,23 +73,22 @@ function configureEventListener(debug: boolean = false) {
         console.log("Configuring event listener...")
     }
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
-        console.log(`\nEvent ${event.event} received!`)
         if (debug) {
+            console.log(`\nEvent ${event.event} received!`)
             console.log(event)
         }
         if (event.event == "OfferFulfilled") {
             let castedEvent = event as OfferFulfilled
-            let offerID = parseInt(castedEvent.returnValues.offerID)
             unseenOfferFulfilledEvents.push(castedEvent)
         } else if (event.event == "OfferClaimable") {
             let castedEvent = event as OfferClaimable
-            let offerID = parseInt(castedEvent.returnValues.offerID)
             unseenOfferUnFulfilledEvents.push(castedEvent)
         } else if (event.event == "RequestDecided") {
             let castedEvent = event as RequestDecided
             let requestID = parseInt(castedEvent.returnValues.requestID)
             openRequests.delete(requestID)
         }
+        unseenEvents.push(event)
     })
     if (debug) {
         console.log("Event listener configured.")
@@ -115,19 +115,23 @@ async function handleUserInput(): Promise<void> {
                         value: "createOffer"
                     },
                     {
-                        name: "4) List open requests",
-                        value: "listRequests"
-                    },
-                    {
-                        name: "5) Check for new acess tokens issued",
-                        value: "checkForOffersEvents"
-                    },
-                    {
-                        name: "6) Create test instant-rent request and offer",
+                        name: "4) Create test instant-rent request and offer",
                         value: "createTestInteractions"
                     },
                     {
-                        name: "7) Exit",
+                        name: "5) Claim money from request creators",
+                        value: "moveMoney"
+                    },
+                    {
+                        name: "6) Check for new acess tokens issued",
+                        value: "checkForOffersEvents"
+                    },
+                    {
+                        name: "7) Check events emitted since last time",
+                        value: "checkForPendingEvents"
+                    },
+                    {
+                        name: "9) Exit",
                         value: "exit"
                     }
                 ]
@@ -136,7 +140,7 @@ async function handleUserInput(): Promise<void> {
 
         switch (answers.choice) {
             case "listAccountBalances":
-                await printAccountsAndBalances(web3MarketplaceInstance); break;
+                await getAndPrintAccountsAndBalances(web3MarketplaceInstance); break;
             case "createRequest": {
                 await handleRequestCreation(); break;
             }
@@ -149,6 +153,12 @@ async function handleUserInput(): Promise<void> {
             case "createTestInteractions": {
                 await createTestInteractions(); break;
             }
+            case "moveMoney": {
+                await moveMoney(); break;
+            }
+            case "checkForPendingEvents": {
+                checkForPendingEvents(); break;
+            }
             case "checkForOffersEvents": {
                 printNewOffersFulfilled(true)
                 printNewOffersUnfulfilled(true)
@@ -159,17 +169,20 @@ async function handleUserInput(): Promise<void> {
     }
 }
 
-async function printAccountsAndBalances(web3Instance: Web3) {
+async function getAndPrintAccountsAndBalances(web3Instance: Web3) {
     let accounts = await web3MarketplaceInstance.eth.getAccounts()
     let balances = await Promise.all(accounts.map(async (account) => {
-        return await web3MarketplaceInstance.eth.getBalance(account)
+        let balance = await web3MarketplaceInstance.eth.getBalance(account)
+        return web3Instance.utils.toBN(balance)
     }))
 
     let output = accounts.map((account, index) => {
-        return `${account} - ${balances[index]} wei`
+        return `${account} - ${balances[index].toString()} wei`
     })
 
     console.log(output)
+
+    return accounts.map((acc, index) => [acc, balances[index]] as [string, BN])
 }
 
 async function handleRequestCreation(): Promise<void> {
@@ -197,7 +210,7 @@ async function handleRequestCreation(): Promise<void> {
     const durationInMinutes = requestDetails.requestDuration * 60
     console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${requestDetails.requestDeadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
 
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInSeconds).send({from: requestDetails.creatorAccount, gas: 200000})
+    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInSeconds).send({from: requestDetails.creatorAccount, gas: 200000, gasPrice: "1"})
 
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -221,7 +234,7 @@ async function handleRequestCreation(): Promise<void> {
     console.log("Request extra:")
     console.log(requestExtra)
 
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 1000000})
+    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 1000000, gasPrice: "1"})
 
     txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -379,7 +392,7 @@ async function handleOfferCreation(): Promise<void> {
 
     // Create offer
     console.log(`Creating offer using Ethereum address: ${offerDetails.creatorAccount}...`)
-    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(offerDetails.requestID).send({from: offerDetails.creatorAccount, gas: 200000})
+    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(offerDetails.requestID).send({from: offerDetails.creatorAccount, gas: 200000, gasPrice: "1"})
 
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -406,7 +419,7 @@ async function handleOfferCreation(): Promise<void> {
     console.log("Offer extra:")
     console.log(offerExtra)
 
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: offerDetails.offerPrice})
+    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: offerDetails.offerPrice, gasPrice: "1"})
 
     if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
         // All good
@@ -505,10 +518,21 @@ async function listOpenRequests() {
 
 async function createTestInteractions(): Promise<void> {
 
+    let balancesBefore = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
+    await utils.waitForEnter()
+
     let requestID = await createTestRequest()
     if (requestID == -1) {
         return
     }
+
+    let balancesAfter = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
+
+    // Filter accounts that have a balance lower than before the request creation...
+    let expenses = balancesAfter.map((entry, index) => [entry[0], balancesBefore[index][1].sub(entry[1])] as [string, BN]).filter(expense => expense[1].cmp(new BN(0)) > 0).map(entry => `${entry[0]} - ${entry[1]} wei`)
+    balancesBefore = balancesAfter
+    console.log("Expenses for request creation:")
+    console.log(expenses)
 
     await utils.waitForEnter()
 
@@ -517,6 +541,10 @@ async function createTestInteractions(): Promise<void> {
         return
     }
 
+    balancesAfter = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
+    expenses = balancesAfter.map((entry, index) => [entry[0], balancesBefore[index][1].sub(entry[1])] as [string, BN]).filter(expense => expense[1].cmp(new BN(0)) > 0).map(entry => `${entry[0]} - ${entry[1]} wei`)
+    console.log("Expenses for offer creation:")
+    console.log(expenses)
     await utils.waitForEnter()
 }
 
@@ -527,7 +555,7 @@ async function createTestRequest(): Promise<number> {
     const requestStartSeconds = requestStart.getTime() / 1000
     const requestDurationMinutes = 44640          // 31 days * 24 hours * 60 minutes
     const requestAuctionPrice = 1
-    const requestInstantRentRules = [1, 1000, 5, 900, 10, 800, 50, 600, 100, 400, 500, 200, 1000, 100, 10000, 50]
+    const requestInstantRentRules = [1, 100000, 5, 90000, 10, 80000, 50, 60000, 100, 40000, 500, 20000, 1000, 10000, 10000, 5000]
     const requestLockerID = 1434123
     const requestCreator = (await web3MarketplaceInstance.eth.getAccounts())[1]
 
@@ -549,7 +577,7 @@ async function createTestRequest(): Promise<number> {
     
     console.log(`2) Creating automated request for ${requestCreator} with deadline: ${requestDeadline.toUTCString()} (${requestDeadlineSeconds} s in UNIX epoch)...`)
 
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDeadlineSeconds).send({from: requestCreator, gas: 200000})
+    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDeadlineSeconds).send({from: requestCreator, gas: 200000, gasPrice: "1"})
 
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -559,6 +587,8 @@ async function createTestRequest(): Promise<number> {
     let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
     console.log(`New request created with ID ${requestID}.`)
 
+    await utils.waitForEnter("Press Enter to print events generated:")
+    checkForPendingEvents()
     await utils.waitForEnter()
     
     let requestExtra = [requestStartSeconds, requestDurationMinutes, requestAuctionPrice].concat(requestInstantRentRules)
@@ -567,7 +597,7 @@ async function createTestRequest(): Promise<number> {
     console.log(`3) Adding request extra to request with ID ${requestID}...`)
     console.log(`Starting time: ${requestStart.toUTCString()}\nDuration (in minutes/hours/days): ${requestDurationMinutes}/${requestDurationMinutes/60}/${requestDurationMinutes/(60*24)}\nCreator: ${requestCreator}\nLocker ID: ${requestLockerID}`)
 
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestCreator, gas: 1000000})
+    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestCreator, gas: 1000000, gasPrice: "1"})
 
     txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -575,7 +605,10 @@ async function createTestRequest(): Promise<number> {
         return -1
     }
 
-    console.log("Request creation complete!")
+    await utils.waitForEnter("Request creation complete! Press Enter to print events generated:")
+    checkForPendingEvents()
+    await utils.waitForEnter()
+
     return requestID
 }
 
@@ -583,13 +616,13 @@ async function createTestOffer(requestID: number): Promise<number> {
     const offerStartingTime = new Date("2021-01-05:00:00:00Z")
     const offerStartingTimeSeconds = offerStartingTime.getTime() / 1000
     const offerDurationMinutes = 21600                 // 15 days * 24 hours * 60 minutes
-    const offerAmount = offerDurationMinutes * 50      // According to the pricing rules in the test request (HARDCODED)
+    const offerAmount = offerDurationMinutes * 5000      // According to the pricing rules in the test request (HARDCODED)
     const offerType = 1                         // Instant-rent offer
 
     const offerCreator = (await web3MarketplaceInstance.eth.getAccounts())[9]
 
     console.log(`4) Creating offer using Ethereum address: ${offerCreator}...`)
-    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerCreator, gas: 200000})
+    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerCreator, gas: 200000, gasPrice: "1"})
 
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
@@ -598,6 +631,9 @@ async function createTestOffer(requestID: number): Promise<number> {
     }
     let offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as number
     console.log(`New offer created with ID ${offerID}`)
+
+    await utils.waitForEnter("Press Enter to print events generated:")
+    checkForPendingEvents()
 
     await utils.waitForEnter("5) Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
 
@@ -611,11 +647,14 @@ async function createTestOffer(requestID: number): Promise<number> {
     console.log(`5) Adding offer extra to offer with ID ${offerID}...`)
     console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nCreator: ${offerCreator}\nJWT encryption key: ${newIdentity.address}`)
 
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount})
+    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount, gasPrice: "1"})
 
     if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
         // All good
         console.log("Offer created!")
+        await utils.waitForEnter("Press Enter to print events generated:")
+        checkForPendingEvents()
+        await utils.waitForEnter()
         return offerID
     } else {
         txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
@@ -623,9 +662,72 @@ async function createTestOffer(requestID: number): Promise<number> {
             console.error(`Offer creation failed with status ${txStatus}`)
             return -1
         } else {
+            await utils.waitForEnter("Press Enter to print events generated:")
+            checkForPendingEvents()
+            await utils.waitForEnter()
             return offerID
         }
     } 
+}
+
+async function moveMoney(): Promise<void> {
+    if (unseenOfferFulfilledEvents.length == 0) {
+        console.log("No new offers have been fulfilled since last time. No money is claimed.")
+        return
+    }
+
+    let fulfilledOfferIDs = unseenOfferFulfilledEvents.map(offDetails => offDetails.returnValues.offerID)
+    console.log("Offers fulfilled:")
+    console.log(fulfilledOfferIDs)
+
+    await utils.waitForEnter()
+
+    for (let offerID of fulfilledOfferIDs) {
+        console.log(`Fetching details from smart contract about offer ${offerID}...`)
+        let offerDetails = await SMAUGMarketplaceInstance.methods.getOffer(offerID).call()
+        let offerExtraDetails = await SMAUGMarketplaceInstance.methods.getOfferExtra(offerID).call()
+        console.log(`Offer maker: ${offerDetails.offerMaker}`)
+        console.log(`Offer encryption key: ${Web3.utils.toHex(offerExtraDetails.offerCreatorEncryptionKey)}`)
+        console.log(`Offer value: ${offerExtraDetails.priceOffered} wei`)
+
+        console.log()
+
+        let requestID = offerDetails.requestID
+        let requestDetails = await SMAUGMarketplaceInstance.methods.getRequest(requestID).call()
+        let requestCreator = requestDetails.requestMaker
+        console.log(`Request ID: ${requestID}`)
+        console.log(`Request maker: ${requestDetails.requestMaker}`)
+
+        await utils.waitForEnter()
+
+        await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
+
+        console.log(`Claiming money (${offerExtraDetails.priceOffered} wei) from the request creator ${requestCreator}.`)
+        let moneyClaimTransactionResult = await SMAUGMarketplaceInstance.methods.withdraw(offerID).send({from: requestCreator, gasPrice: "1"})
+
+        let txStatus = (moneyClaimTransactionResult.events!.FunctionStatus.returnValues.status) as number
+        if (txStatus != 0) {
+            console.error(`Offer creation failed with status ${txStatus}`)
+            return
+        }
+        console.log("Money claimed.")
+
+        await utils.waitForEnter()
+        await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
+    }
+
+    await utils.waitForEnter()
+}
+
+function checkForPendingEvents() {
+    if (unseenEvents.length == 0) {
+        console.log("No pending events.")
+        return
+    }
+
+    console.log("Events emitted:")
+    console.log(unseenEvents)
+    unseenEvents = []
 }
 
 function printNewOffersFulfilled(force: boolean = false) {
@@ -643,7 +745,7 @@ function printNewOffersFulfilled(force: boolean = false) {
 function printNewOffersUnfulfilled(force: boolean = false) {
     if (unseenOfferUnFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
-        unseenOfferUnFulfilledEvents.forEach((offer, index) => {4
+        unseenOfferUnFulfilledEvents.forEach((offer, index) => {
             console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
         })
         unseenOfferUnFulfilledEvents = []
