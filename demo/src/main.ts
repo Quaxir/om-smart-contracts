@@ -13,6 +13,9 @@ import appendQuery from "append-query"
 import urljoin from "url-join"
 import { EventLog } from "web3-core/types"
 import { util } from "chai"
+import * as base64 from "url-safe-base64"
+
+const nacl = require("js-nacl")
 
 main().catch(error => {
     console.error(error)
@@ -30,6 +33,10 @@ var openRequests: Set<number>
 var unseenEvents: EventLog[]
 var unseenOfferFulfilledEvents: OfferFulfilled[]
 var unseenOfferUnFulfilledEvents: OfferClaimable[]
+
+var keys: Map<number, [Uint8Array, Uint8Array]>     // offerID -> (secret key, public key)
+
+var crypto: any
 
 async function main() {
     const options = yargs
@@ -55,6 +62,10 @@ async function main() {
     openRequests = new Set()
     unseenOfferFulfilledEvents = []
     unseenOfferUnFulfilledEvents = []
+
+    keys = new Map()
+
+    await nacl.instantiate(nacl => crypto = nacl)
 
     configureEventListener(false)
     await handleUserInput()
@@ -634,23 +645,27 @@ async function createTestOffer(requestID: number): Promise<number> {
         console.error(`Offer creation failed with status ${txStatus}`)
         return -1
     }
-    let offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as number
+    let offerID = parseInt(newOfferTransactionResult.events!.OfferAdded.returnValues.offerID)
     console.log(`New offer created with ID ${offerID}`)
 
     await utils.waitForEnter("Press Enter to print events generated:")
     checkForPendingEvents()
 
-    await utils.waitForEnter("5) Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
+    await utils.waitForEnter("5) Generating new Curve25519 keypair for JWT encryption. Press Enter to continue:")
 
-    const newIdentity = await web3MarketplaceInstance.eth.accounts.create()
-    console.log({private: newIdentity.privateKey, public: newIdentity.address})
+    let newKeyPair = crypto.crypto_box_keypair()
+    keys.set(offerID, [newKeyPair.boxSk, newKeyPair.boxPk])
+
+    let privateKeyEncoded = "0x" + crypto.to_hex(newKeyPair.boxSk)
+    let publicKeyEncoded = "0x" + crypto.to_hex(newKeyPair.boxPk)
+    console.log({private: privateKeyEncoded, public: publicKeyEncoded})
 
     await utils.waitForEnter()
 
-    let offerExtra = [offerStartingTimeSeconds, offerDurationMinutes, offerType, "0x" + newIdentity.address.substr(2).padStart(64, "0")] as any[]
+    let offerExtra = [offerStartingTimeSeconds, offerDurationMinutes, offerType, publicKeyEncoded] as any[]
 
     console.log(`5) Adding offer extra to offer with ID ${offerID}...`)
-    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nCreator: ${offerCreator}\nJWT encryption key: ${newIdentity.address}`)
+    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nCreator: ${offerCreator}\nJWT encryption key: ${publicKeyEncoded}`)
 
     let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount, gasPrice: "1"})
 
@@ -739,7 +754,17 @@ function printNewOffersFulfilled(force: boolean = false) {
     if (unseenOfferFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
         unseenOfferFulfilledEvents.forEach((offer, index) => {
-            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID} - token: ${offer.returnValues.token}`)
+            console.log(`${index+1}`)
+            console.log(`Offer ID: ${offer.returnValues.offerID}`)
+            console.log(`Encrypted token: ${offer.returnValues.token}`)
+            let offerKeypair = keys.get(parseInt(offer.returnValues.offerID))
+            let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
+            console.log(`Token decoded: ${tokenDecoded}`)
+            let tokenBytes = crypto.encode_utf8(tokenDecoded)
+            console.log(`Token bytes: ${tokenBytes}`)
+            //TODO: Stuck here
+            let decryptedToken = crypto.crypto_box_seal_open(tokenBytes, offerKeypair[1], offerKeypair[0])
+            console.log(`Decrypted token: ${decryptedToken}`)
         })
         unseenOfferFulfilledEvents = []
     } else if (force) {     //unseenOfferFulfilledEvents.length == 0
