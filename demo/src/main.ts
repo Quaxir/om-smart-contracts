@@ -12,8 +12,7 @@ import fetch from "node-fetch"
 import appendQuery from "append-query"
 import urljoin from "url-join"
 import { EventLog } from "web3-core/types"
-import { util } from "chai"
-import * as base64 from "url-safe-base64"
+import jwtDecode from "jwt-decode";
 
 const nacl = require("js-nacl")
 
@@ -611,7 +610,7 @@ async function createTestRequest(): Promise<number> {
     requestExtra.push(requestLockerID)
 
     console.log(`3) Adding request extra to request with ID ${requestID}...`)
-    console.log(`Starting time: ${requestStart.toUTCString()}\nDuration (in minutes/hours/days): ${requestDurationMinutes}/${requestDurationMinutes/60}/${requestDurationMinutes/(60*24)}\nCreator: ${requestCreator}\nLocker ID: ${requestLockerID}`)
+    console.log(`Starting time: ${requestStart.toUTCString()}\nDuration (in minutes/hours/days): ${requestDurationMinutes}/${requestDurationMinutes/60}/${requestDurationMinutes/(60*24)}\nEnd time: ${new Date(requestStart.getTime()*1000 + requestDurationMinutes*60*1000).toUTCString()}\nCreator: ${requestCreator}\nLocker ID: ${requestLockerID}`)
 
     let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestCreator, gas: 1000000, gasPrice: "1"})
 
@@ -665,7 +664,7 @@ async function createTestOffer(requestID: number): Promise<number> {
     let offerExtra = [offerStartingTimeSeconds, offerDurationMinutes, offerType, publicKeyEncoded] as any[]
 
     console.log(`5) Adding offer extra to offer with ID ${offerID}...`)
-    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nCreator: ${offerCreator}\nJWT encryption key: ${publicKeyEncoded}`)
+    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nEnd time: ${new Date(offerStartingTime.getTime()*1000 + offerDurationMinutes*60*1000).toUTCString()}\nCreator: ${offerCreator}\nJWT encryption key: ${publicKeyEncoded}`)
 
     let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount, gasPrice: "1"})
 
@@ -758,13 +757,17 @@ function printNewOffersFulfilled(force: boolean = false) {
             console.log(`Offer ID: ${offer.returnValues.offerID}`)
             console.log(`Encrypted token: ${offer.returnValues.token}`)
             let offerKeypair = keys.get(parseInt(offer.returnValues.offerID))
+            // Token decoding and decryption
             let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
-            console.log(`Token decoded: ${tokenDecoded}`)
-            let tokenBytes = crypto.encode_utf8(tokenDecoded)
-            console.log(`Token bytes: ${tokenBytes}`)
-            //TODO: Stuck here
-            let decryptedToken = crypto.crypto_box_seal_open(tokenBytes, offerKeypair[1], offerKeypair[0])
-            console.log(`Decrypted token: ${decryptedToken}`)
+            let cipherText = utils.base64ToUint8Array(tokenDecoded)
+            let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
+            let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
+            console.log(`Decrypted token: ${decodedDecryptedToken}`)
+
+            let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
+            let jwtPayload = jwtDecode(decodedDecryptedToken)
+            console.log("JWT:")
+            console.log({header: jwtHeader, payload: jwtPayload})
         })
         unseenOfferFulfilledEvents = []
     } else if (force) {     //unseenOfferFulfilledEvents.length == 0
