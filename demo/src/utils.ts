@@ -31,3 +31,11 @@ export function base64ToUint8Array(base64String: string): Uint8Array {
     }
     return bytes;
 }
+
+export interface EnvVariables {
+    MPAddress: string,
+    MPABIPath: string,
+    ethereumMPAddress: string,
+    MPOwner: string,
+    MPBackendAddress: string,
+}

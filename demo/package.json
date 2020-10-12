@@ -3,12 +3,13 @@
     "postinstall": "npm run generateWeb3Types",
     "generateWeb3Types": "npx typechain --target=web3-v1 'config/abi/*.json'",
     "demo": "ts-node ./src/main.ts",
-    "demo:default": "ts-node ./src/main.ts --marketplace-address 0x51Cdd045E893528fB7C6F2DCEB07Efa9eb2FB375 --backend-url http://127.0.0.1:61234 --marketplace-abi-path ./config/abi/SMAUGMarketPlace.json --ethereum-address ws://127.0.0.1:8545 --marketplace-owner 0x471e0575bFC76d7e189ab3354E0ecb70FCbf3E46",
+    "demo:default": "export $(cat .env | xargs) && ts-node ./src/main.ts",
     "watch": "npx tsc -w"
   },
   "dependencies": {
     "append-query": "^2.1.0",
     "atob": "^2.1.2",
+    "dotenv": "^8.2.0",
     "inquirer": "^7.1.0",
     "js-nacl": "^1.3.2",
     "js-yaml": "^3.13.1",

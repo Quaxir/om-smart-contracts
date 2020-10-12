@@ -13,6 +13,7 @@ import appendQuery from "append-query"
 import urljoin from "url-join"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
+import { sys } from "typescript"
 
 const nacl = require("js-nacl")
 
@@ -38,24 +39,19 @@ var keys: Map<number, [Uint8Array, Uint8Array]>     // offerID -> (secret key, p
 var crypto: any
 
 async function main() {
-    const options = yargs
-                        .usage("Usage: -c <marketplace_contract_address> -b <marketplace_backend_url> -a <marketplace_contract_ABI> -n <Ethereum_Network_address> -o <marketplace_contract_owner_address>")
-                        .option("c", {alias: "marketplace-address", describe: "The address of the marketplace to interact with.", type: "string", demandOption: true})
-                        .option("a", {alias: "marketplace-abi-path", describe: "The path to the ABI of the marketplace to interact with.", type: "string", demandOption: true})
-                        .option("b", {alias: "backend-url", describe: "The URL of the marketplace backend.", type: "string", demandOption: true})
-                        .option("n", {alias: "ethereum-address", describe: "The address of the marketplace Ethereum instance.", type: "string", demandOption: true})
-                        .argv
+
+    const variables = parseAndReturnEnvVariables(process.env)
 
     try {
-        backendURL = new URL(options.b)
+        backendURL = new URL(variables.MPBackendAddress)
     } catch {
         throw Error("Marketplace URL is not a valid URL.")
     }
 
-    web3MarketplaceInstance = new Web3(options.n)
-    SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(options.a).toString()), options.c) as any) as SMAUGMarketplace
+    web3MarketplaceInstance = new Web3(variables.ethereumMPAddress)
+    SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(variables.MPABIPath).toString()), variables.MPAddress) as any) as SMAUGMarketplace
 
-    printArgumentsDetails(options)
+    printArgumentsDetails(variables)
 
     unseenEvents = []
     openRequests = new Set()
@@ -70,11 +66,42 @@ async function main() {
     await handleUserInput()
 }
 
-function printArgumentsDetails(options: any) {
+function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): utils.EnvVariables {
+    const MPAddress = process.env["MP_ADDRESS"] as string
+    const MPABIPath = process.env["MP_ABI_PATH"] as string
+    const ethereumMPAddress = process.env["ETHEREUM_MP_ADDRESS"] as string
+    const MPOwner = process.env["MP_OWNER"] as string
+    const MPBackendAddress = process.env["MP_BACKEND_ADDRESS"] as string
+
+    if (MPAddress == undefined) {
+        console.error("MP_ADDRESS env variable missing.")
+        sys.exit(1)
+    }
+    if (MPABIPath == undefined) {
+        console.error("MP_ABI_PATH env variable missing.")
+        sys.exit(1)
+    }
+    if (ethereumMPAddress == undefined) {
+        console.error("ETHEREUM_MP_ADDRESS env variable missing.")
+        sys.exit(1)
+    }
+    if (MPOwner == undefined) {
+        console.error("MP_OWNER env variable missing.")
+        sys.exit(1)
+    }
+    if (MPBackendAddress == undefined) {
+        console.error("MP_BACKEND_ADDRESS env variable missing.")
+        sys.exit(1)
+    }
+    
+    return { MPAddress, MPABIPath, ethereumMPAddress, MPOwner, MPBackendAddress }
+}
+
+function printArgumentsDetails(options: utils.EnvVariables) {
     console.log(`Arguments used:\n
-        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.n}\n
-        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.c}\n
-        - MARKETPLACE BACKEND ADDRESS: ${options.b}
+        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.ethereumMPAddress}\n
+        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.MPAddress}\n
+        - MARKETPLACE BACKEND ADDRESS: ${options.MPBackendAddress}
     `)
 }
 
