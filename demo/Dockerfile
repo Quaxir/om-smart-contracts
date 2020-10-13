@@ -8,7 +8,7 @@ COPY package.json tsconfig.json ./
 COPY ./config/abi ./config/abi
 RUN npm install --unsafe-perm
 
-COPY .env ./
+COPY docker.env ./
 COPY ./src ./src
 
-ENTRYPOINT [ "/usr/local/bin/npm", "run", "demo:default" ]
+ENTRYPOINT [ "/usr/local/bin/npm", "run", "demo:docker" ]

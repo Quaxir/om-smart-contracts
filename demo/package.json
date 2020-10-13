@@ -3,7 +3,8 @@
     "postinstall": "npm run generateWeb3Types",
     "generateWeb3Types": "npx typechain --target=web3-v1 'config/abi/*.json'",
     "demo": "ts-node ./src/main.ts",
-    "demo:default": "export $(cat .env | xargs) && ts-node ./src/main.ts",
+    "demo:docker": "export $(cat docker.env | xargs) && ts-node ./src/main.ts",
+    "demo:local": "export $(cat local.env | xargs) && ts-node ./src/main.ts",
     "watch": "npx tsc -w"
   },
   "dependencies": {

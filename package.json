@@ -14,7 +14,7 @@
         "test:truffle": "npx truffle test",
         "migrate": "npm run build; npx truffle migrate",
         "migrate:marketplace": "npm run migrate -- --network marketplace",
-        "deploy:marketplace": "cd scripts && ./launch_marketplace_blockchain"
+        "deploy:marketplace-local": "cd scripts && ./launch_marketplace_blockchain"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^2.5.0",
