@@ -5,47 +5,51 @@ import BN from "bn.js"
 import { SmaugMarketPlace as SMAUGMarketplace, OfferFulfilled, OfferClaimable, RequestDecided } from "../types/web3-v1-contracts/SMAUGMarketPlace"
 
 import * as utils from "./utils"
-import yargs from "yargs"
-import inquirer, { QuestionCollection } from "inquirer"
+import inquirer from "inquirer"
 import { URL } from "url"
 import fetch from "node-fetch"
-import appendQuery from "append-query"
-import urljoin from "url-join"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
-import { sys } from "typescript"
 
-const nacl = require("js-nacl")
+const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
-main().catch(error => {
-    console.error(error)
+main().catch((error: Error) => {
+    console.error(error.message)
+    console.error(error.name)
     process.exit(1)
 }).then(() => {
     console.log("Bye!")
     process.exit(0)
 })
 
+process.on('SIGINT', () => {
+    console.log("Bye!");
+    process.exit(0);
+});
+
 var web3MarketplaceInstance: Web3
 var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
 var backendHost: string | undefined
 
-var openRequests: Set<number>
-var unseenEvents: EventLog[]
-var unseenOfferFulfilledEvents: OfferFulfilled[]
-var unseenOfferUnFulfilledEvents: OfferClaimable[]
+var openRequests: Set<number> = new Set()
+var unseenEvents: EventLog[] = []
+var unseenOfferFulfilledEvents: OfferFulfilled[] = []
+var unseenOfferUnFulfilledEvents: OfferClaimable[] = []
 
-var keys: Map<number, [Uint8Array, Uint8Array]>     // offerID -> (secret key, public key)
+var keys: Map<string, [Uint8Array, Uint8Array]> = new Map()     // offerID -> (secret key, public key)
 
-var crypto: any
+let crypto: any                                     // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
-async function main() {
+var debug: Boolean
 
-    const variables = parseAndReturnEnvVariables(process.env)
+async function main(): Promise<void> {
+
+    const variables = utils.parseAndReturnEnvVariables(process.env)
 
     try {
         backendURL = new URL(variables.MPBackendAddress)
-    } catch {
+    } catch(err){
         throw Error("Marketplace URL is not a valid URL.")
     }
 
@@ -53,14 +57,7 @@ async function main() {
     SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(variables.MPABIPath).toString()), variables.MPAddress) as any) as SMAUGMarketplace
     backendHost = variables.MPBackendHost
 
-    printArgumentsDetails(variables)
-
-    unseenEvents = []
-    openRequests = new Set()
-    unseenOfferFulfilledEvents = []
-    unseenOfferUnFulfilledEvents = []
-
-    keys = new Map()
+    utils.printArgumentsDetails(variables)
 
     await nacl.instantiate(nacl => crypto = nacl)
 
@@ -68,54 +65,18 @@ async function main() {
     await handleUserInput()
 }
 
-function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): utils.EnvVariables {
-    const MPAddress = process.env["MP_ADDRESS"] as string
-    const MPABIPath = process.env["MP_ABI_PATH"] as string
-    const ethereumMPAddress = process.env["ETHEREUM_MP_ADDRESS"] as string
-    const MPOwner = process.env["MP_OWNER"] as string
-    const MPBackendAddress = process.env["MP_BACKEND_ADDRESS"] as string
-    const MPBackendHost = process.env["MP_BACKEND_HOST"] as string              // Optional
-
-    if (MPAddress == undefined) {
-        console.error("MP_ADDRESS env variable missing.")
-        sys.exit(1)
-    }
-    if (MPABIPath == undefined) {
-        console.error("MP_ABI_PATH env variable missing.")
-        sys.exit(1)
-    }
-    if (ethereumMPAddress == undefined) {
-        console.error("ETHEREUM_MP_ADDRESS env variable missing.")
-        sys.exit(1)
-    }
-    if (MPOwner == undefined) {
-        console.error("MP_OWNER env variable missing.")
-        sys.exit(1)
-    }
-    if (MPBackendAddress == undefined) {
-        console.error("MP_BACKEND_ADDRESS env variable missing.")
-        sys.exit(1)
-    }
-    
-    return { MPAddress, MPABIPath, ethereumMPAddress, MPOwner, MPBackendAddress, MPBackendHost }
-}
-
-function printArgumentsDetails(options: utils.EnvVariables) {
-    console.log(`Arguments used:\n
-        - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.ethereumMPAddress}\n
-        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.MPAddress}\n
-        - MARKETPLACE BACKEND ADDRESS: ${options.MPBackendAddress}
-    `)
-}
-
 function configureEventListener(debug: boolean = false) {
-    if (debug) {
-        console.log("Configuring event listener...")
-    }
+    debug && console.log("Configuring event listener...")
+    SMAUGMarketplaceInstance.events
+
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
-            console.log(`\nEvent ${event.event} received!`)
-            console.log(event)
+            if (error != null) {
+                console.log(`${error.name}\n${error.message}`)
+            } else {
+                console.log(`\nEvent ${event.event} received!`)
+                console.log(event)
+            }
         }
         if (event.event == "OfferFulfilled") {
             let castedEvent = event as OfferFulfilled
@@ -130,52 +91,40 @@ function configureEventListener(debug: boolean = false) {
         }
         unseenEvents.push(event)
     })
-    if (debug) {
-        console.log("Event listener configured.")
-    }
+
+    debug && console.log("Event listener configured.")
 }
 
 async function handleUserInput(): Promise<void> {
     while (true) {
+        var choiceIndex = 1
         let answers = await inquirer.prompt([
             {
                 type: "list",
                 name: "choice", message: "What would you like to do?",
                 choices: [
                     {
-                        name: "1) List accounts and balances",
+                        name: `${choiceIndex++}) List accounts and balances`,
                         value: "listAccountBalances"
                     },
-                    // {
-                    //     name: "2) Create instant-rent request",
-                    //     value: "createRequest"
-                    // },
-                    // {
-                    //     name: "3) Create instant-rent offer",
-                    //     value: "createOffer"
-                    // },
-                    // {
-                    //     name: "4) List open requests",
-                    //     value: "listRequests"
-                    // },
                     {
-                        name: "2) Create test instant-rent request and offer",
-                        value: "createTestInteractions"
+                        name: `${choiceIndex++}) Trigger Interledger`,
+                        value: "triggerInterledger"
                     },
                     {
-                        name: "3) Claim money from request creators",
-                        value: "moveMoney"
-                    },
-                    {
-                        name: "4) Check for new acess tokens issued",
+                        name: `${choiceIndex++}) Check for new acess tokens issued`,
                         value: "checkForOffersEvents"
                     },
                     {
-                        name: "5) Check events emitted since last time",
+                        name: `${choiceIndex++}) Check events emitted since last time`,
                         value: "checkForPendingEvents"
                     },
                     {
-                        name: "9) Exit",
+                        name: `${choiceIndex++}) Turn debug flag ON/OFF`,
+                        value: "flipDebug"
+                    },
+                    {
+                        name: `${choiceIndex++}) Exit`,
                         value: "exit"
                     }
                 ]
@@ -185,35 +134,27 @@ async function handleUserInput(): Promise<void> {
         switch (answers.choice) {
             case "listAccountBalances":
                 await getAndPrintAccountsAndBalances(web3MarketplaceInstance); break;
-            case "createRequest": {
-                await handleRequestCreation(); break;
+            case "triggerInterledger": {
+                await triggerInterledger(); break;
             }
-            case "createOffer": {
-                await handleOfferCreation(); break;
-            }
-            case "listRequests": {
-                await listOpenRequests(); break;
-            }
-            case "createTestInteractions": {
-                await createTestInteractions(); break;
-            }
-            case "moveMoney": {
-                await moveMoney(); break;
+            case "checkForOffersEvents": {
+                printNewOffersFulfilled()
+                printNewOffersUnfulfilled()
+                break
             }
             case "checkForPendingEvents": {
                 checkForPendingEvents(); break;
             }
-            case "checkForOffersEvents": {
-                printNewOffersFulfilled(true)
-                printNewOffersUnfulfilled(true)
-                break
+            case "flipDebug": {
+                flipDebug(); break;
             }
             case "exit": { return }
         }
     }
 }
 
-async function getAndPrintAccountsAndBalances(web3Instance: Web3) {
+// Returns a list of tuples where each tuple is [acount: string, balance: BN]
+async function getAndPrintAccountsAndBalances(web3Instance: Web3): Promise<[string, BN][]> {
     let accounts = await web3MarketplaceInstance.eth.getAccounts()
     let balances = await Promise.all(accounts.map(async (account) => {
         let balance = await web3MarketplaceInstance.eth.getBalance(account)
@@ -229,566 +170,130 @@ async function getAndPrintAccountsAndBalances(web3Instance: Web3) {
     return accounts.map((acc, index) => [acc, balances[index]] as [string, BN])
 }
 
-async function handleRequestCreation(): Promise<void> {
-    const requestDetails = await inquirer.prompt(getRequestCreationQuestions())
-    console.log(`Creating request using Ethereum address: ${requestDetails.creatorAccount}...`)
+async function triggerInterledger(): Promise<void> {
+    console.log("Preparing system for Interledger operation...")
 
-    const backendEndpoint = getBackendEndpoint(requestDetails.creatorAccount)
-    console.log(`Requesting new access token from marketplace backend at ${backendEndpoint}...`)
+    const testRequestCreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]
+    const testRequestDetails = await getInterledgerAuctionRequest(testRequestCreatorAccount)
+    const testRequestID = await createInterledgerAuctionRequest(testRequestDetails)
+    const testOffer1CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[8]
+    const testOffer1Details = await getInterledgerAuctionOffer1(testRequestDetails, testOffer1CreatorAccount)
+    const testOffer2CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[9]
+    const testOffer2Details = await getInterledgerAuctionOffer2(testRequestDetails, testOffer2CreatorAccount)
+    const testOffer1ID = await createInterledgerAuctionOffer(testOffer1Details, testRequestID)
+    const testOffer2ID = await createInterledgerAuctionOffer(testOffer2Details, testRequestID)
 
-    let requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
-    let requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
-    let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
-    console.log("Request token obtained from backend:")
-    // Hard-coded values, but it works
-    console.log(requestCreationToken)
+    console.log("System ready for Interledger operation.")
+}
 
-    await utils.waitForEnter()
+function getInterledgerAuctionRequest(creatorAccount: string): utils.AuctionRequestCompleteDetails {
+    const deadline = new Date("2020-12-31:23:59:59Z")
+    const startTime = new Date("2021-01-01:00:00:00Z")
+    const durationInMinutes = new BN(44640)          // 31 days * 24 hours * 60 minutes
+    const minAuctionPricePerMinute = new BN(50)
+    const lockerID = new BN(1434123)
 
-    console.log("Token content decoded:")
-    console.log(getTokenDetails(requestCreationToken.encoded))
+    return { deadline, startTime, durationInMinutes, minAuctionPricePerMinute, lockerID, creatorAccount }
+}
 
-    await utils.waitForEnter()
-    
-    // Create request
-    const deadline = new Date(requestDetails.requestDeadline)
-    const deadlineInSeconds = deadline.getTime() / 1000
-    const durationInMinutes = requestDetails.requestDuration * 60
-    console.log(`Creating request for ${requestDetails.creatorAccount} with deadline: ${deadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
+async function createInterledgerAuctionRequest(requestDetails: utils.AuctionRequestCompleteDetails): Promise<BN> {
+    const backendEndpoint = utils.getBackendEndpoint(backendURL, requestDetails.creatorAccount)
+    const requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
+    const requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
+    const requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
+    debug && console.log(requestCreationToken)
 
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, deadlineInSeconds).send({from: requestDetails.creatorAccount, gas: 200000, gasPrice: "1"})
+    const newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDetails.deadline.getTime()/1000).send({from: requestDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
 
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        console.error(`Request creation failed with status ${txStatus}`)
-        return
+        throw new Error(`Request creation failed with status ${txStatus}`)
     }
-    let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
-    console.log(`New request created with ID ${requestID}.`)
+    const requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as BN
 
-    await utils.waitForEnter()
+    debug && console.log(`Request submitted with ID: ${requestID}`)
     
-    // Create request extra
-    const startTimeInSeconds = new Date(requestDetails.requestStartingTime).getTime() / 1000
-
-    let requestExtra = [startTimeInSeconds, durationInMinutes, requestDetails.minAuctionPrice]
-    let instantRulesFormatted = getFormattedInstantRules(requestDetails.instantRules)
-    requestExtra = requestExtra.concat(instantRulesFormatted)
-    requestExtra.push(requestDetails.lockerID)
-
-    console.log(`Adding request extra to request with ID ${requestID}...`)
-    console.log("Request extra:")
-    console.log(requestExtra)
-
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestDetails.creatorAccount, gas: 1000000, gasPrice: "1"})
+    // No instant rent rules, since that is not the goal here
+    const requestExtra = [requestDetails.startTime.getTime()/1000, requestDetails.durationInMinutes.toString(), requestDetails.minAuctionPricePerMinute.toString(), requestDetails.lockerID.toString()]
+    debug && console.log(`Submitting request extra [${requestExtra}]...`)
+    const newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID.toString(), requestExtra).send({from: requestDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
 
     txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        console.error(`Request extra submission failed with status ${txStatus}`)
-        return
+        throw new Error(`Request extra submission failed with status ${txStatus}`)
     }
 
-    openRequests.add(requestID)
-    console.log("Request creation complete!")
-
-    await utils.waitForEnter()
-}
-
-// Expected answers from these questions are {requestDeadline: datetime, requestStartingTime: datetime, requestDuration: string, minAuctionPrice: string, lockerID: string, creatorAccount: string}
-function getRequestCreationQuestions(): inquirer.QuestionCollection {
-    return [
-        {
-            type: "string",
-            name: "requestDeadline",
-            message: "Request deadline",
-            validate: (input) => {
-                let datetime = new Date(input).getTime()
-                if (isNaN(datetime)) {
-                    return "Not a valid date."
-                }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
-                if (secondsSinceEpoch < new Date().getTime() / 1000) {
-                    return "Deadline must not be already past."
-                }
-                return true
-            }
-        },
-        {
-            type: "input",
-            name: "requestStartingTime",
-            message: "Request starting time",
-            validate: (input) => {
-                let datetime = new Date(input).getTime()
-                if (isNaN(datetime)) {
-                    return "Not a valid date."
-                }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
-                if (secondsSinceEpoch < new Date().getTime() / 1000) {
-                    return "Starting time must not be already past."
-                }
-                return true
-            }
-        },
-        {
-            type: "input",
-            name: "requestDuration",
-            message: "Request duration (in minutes)",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }            
-        },
-        {
-            type: "input",
-            name: "minAuctionPrice",
-            message: "Starting price/minute value for auction",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }            
-        },
-        {
-            type: "input",
-            name: "instantRules",
-            message: "Instant rent rules (in array format). Enter -1 to only allow auction-based offers",
-            validate: (input: string) => {
-                if (input === "-1") {
-                    return true;
-                }
-
-                let cleanedInput = input.substring(1, input.length-1)
-                let values = cleanedInput.split(",")
-                if (values.filter((value) => {              // Check if there's any value that cannot be parsed as an integer
-                    return !parseInt(value)
-                }).length > 0) {
-                    return "Some values are not valid numbers."
-                }
-                return true
-            }
-        },
-        {
-            type: "input",
-            name: "lockerID",
-            message: "Locker ID",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }            
-        },
-        {
-            type: "input",
-            name: "creatorAccount",
-            message: "Request creator account",
-            validate: (input) => {
-                if (Web3.utils.isAddress(input)) {
-                    return true
-                }
-                return "Value is not a valid address."
-            }
-        }
-    ] as inquirer.QuestionCollection
-}
-
-function getBackendEndpoint(address: string): string {
-    let backendEndpoint = urljoin(backendURL.toString(), "api", "marketplace", "gettoken")
-    return appendQuery(backendEndpoint, {ethereum_address: address})
-}
-
-function getTokenDetails(tokenEncoded: string): utils.MarketplaceAccessTokenComponents {
-    const nonceLength = 64
-    const selectorLength = 8
-    const addressLength = 40
-
-    let startIndex = 2
-    return {
-        nonce: "0x" + tokenEncoded.substr(startIndex, nonceLength),
-        methodSelector: "0x" + tokenEncoded.substr(startIndex+nonceLength, selectorLength),
-        requestCreatorAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength, addressLength),
-        contractAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength+addressLength)
-    }
-}
-
-function getFormattedInstantRules(details: string): number[] {
-    if (details == "-1") {
-        return []
-    }
-    return details.substring(1, details.length-1).split(",").map(value => parseInt(value))
-}
-
-async function handleOfferCreation(): Promise<void> {
-    const offerDetails = await inquirer.prompt(getOfferCreationQuestions())
-
-    // Create offer
-    console.log(`Creating offer using Ethereum address: ${offerDetails.creatorAccount}...`)
-    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(offerDetails.requestID).send({from: offerDetails.creatorAccount, gas: 200000, gasPrice: "1"})
-
-    let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`Offer creation failed with status ${txStatus}`)
-        return
-    }
-    let offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as number
-    console.log(`New offer created with ID ${offerID}`)
-
-    await utils.waitForEnter("Generating new ECDSA keypair for JWT encryption. Press Enter to continue:")
-
-    const newIdentity = await web3MarketplaceInstance.eth.accounts.create()
-    console.log({private: newIdentity.privateKey, public: newIdentity.address})
-
-    await utils.waitForEnter()
+    debug && console.log(`Request extra submitted for ID: ${requestID}`)
     
-    // Create offer extra
-    const offerType = 1           // Offer is an auction one (no instant rent)
-    const startTimeInSeconds = new Date(offerDetails.offerStartingTime).getTime() / 1000
-
-    let offerExtra = [startTimeInSeconds, offerDetails.offerDuration, offerType, Web3.utils.toBN(newIdentity.address)] as any[]
-
-    console.log(`Adding offer extra to offer with ID ${offerID}...`)
-    console.log("Offer extra:")
-    console.log(offerExtra)
-
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerDetails.creatorAccount, gas: 1000000, value: offerDetails.offerPrice, gasPrice: "1"})
-
-    if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
-        // All good
-        console.log("Offer created!")
-    } else {
-        txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
-        if (txStatus != 0) {
-            console.error(`Offer creation failed with status ${txStatus}`)
-            return
-        }
-    }
-    await utils.waitForEnter()
-}
-
-// Expected answers from these questions are {requestID: string, offerStartingTime: string, offerDuration: string, pricePerMinute: string, creatorEncryptionKey: string, creatorAuthKey: string, creatorAccount: string}
-function getOfferCreationQuestions(): inquirer.QuestionCollection {
-    return [
-        {
-            type: "input",
-            name: "requestID",
-            message: "Request ID",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }
-        },
-        {
-            type: "input",
-            name: "offerStartingTime",
-            message: "Offer starting time",
-            validate: (input) => {
-                let datetime = new Date(input).getTime()
-                if (isNaN(datetime)) {
-                    return "Not a valid date."
-                }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
-                if (secondsSinceEpoch < new Date().getTime() / 1000) {
-                    return "Starting time must not be already past."
-                }
-                return true
-            }
-        },
-        {
-            type: "input",
-            name: "offerDuration",
-            message: "Offer duration (in minutes)",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }            
-        },
-        {
-            type: "input",
-            name: "offerPrice",
-            message: "Total amount willing to pay",
-            validate: (input) => {
-                try {
-                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
-                        return true
-                    }
-                    return "Value must be > 0."
-                } catch {
-                    return "Value is not a number."
-                }
-            }            
-        },
-        {
-            type: "input",
-            name: "creatorAccount",
-            message: "Offer creator account",
-            validate: (input) => {
-                if (Web3.utils.isAddress(input)) {
-                    return true
-                }
-                return "Value is not a valid address."
-            }
-        }
-    ] as inquirer.QuestionCollection
-}
-
-async function listOpenRequests() {
-    console.log("NOT YET IMPLEMENTED.")
-}
-
-async function createTestInteractions(): Promise<void> {
-
-    let balancesBefore = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
-    await utils.waitForEnter()
-
-    let requestID = await createTestRequest()
-    if (requestID == -1) {
-        return
-    }
-
-    let balancesAfter = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
-
-    // Filter accounts that have a balance lower than before the request creation...
-    let expenses = balancesAfter.map((entry, index) => [entry[0], balancesBefore[index][1].sub(entry[1])] as [string, BN]).filter(expense => expense[1].cmp(new BN(0)) > 0).map(entry => `${entry[0]} - ${entry[1]} wei`)
-    balancesBefore = balancesAfter
-    console.log("Expenses for request creation:")
-    console.log(expenses)
-
-    await utils.waitForEnter()
-
-    let offerID = await createTestOffer(requestID)
-    if (offerID == -1) {
-        return
-    }
-
-    balancesAfter = await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
-    expenses = balancesAfter.map((entry, index) => [entry[0], balancesBefore[index][1].sub(entry[1])] as [string, BN]).filter(expense => expense[1].cmp(new BN(0)) > 0).map(entry => `${entry[0]} - ${entry[1]} wei`)
-    console.log("Expenses for offer creation:")
-    console.log(expenses)
-    await utils.waitForEnter()
-}
-
-async function createTestRequest(): Promise<number> {
-    const requestDeadline = new Date("2020-12-31:23:59:59Z")
-    const requestDeadlineSeconds = requestDeadline.getTime() / 1000
-    const requestStart = new Date("2021-01-01:00:00:00Z")
-    const requestStartSeconds = requestStart.getTime() / 1000
-    const requestDurationMinutes = 44640          // 31 days * 24 hours * 60 minutes
-    const requestAuctionPrice = 1
-    const requestInstantRentRules = [1, 100000, 5, 90000, 10, 80000, 50, 60000, 100, 40000, 500, 20000, 1000, 10000, 10000, 5000]
-    const requestLockerID = 1434123
-    const requestCreator = (await web3MarketplaceInstance.eth.getAccounts())[1]
-
-    const backendEndpoint = getBackendEndpoint(requestCreator)
-    console.log(`1) Requesting new access token from marketplace backend at ${backendEndpoint}...`)
-
-    let requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
-    let requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
-    let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
-    console.log("Request token obtained from backend:")
-    // Hard-coded values, but it works
-    console.log(requestCreationToken)
-    
-    await utils.waitForEnter()
-
-    console.log("Token content decoded:")
-    console.log(getTokenDetails(requestCreationToken.encoded))
-
-    await utils.waitForEnter()
-    
-    console.log(`2) Creating automated request for ${requestCreator} with deadline: ${requestDeadline.toUTCString()} (${requestDeadlineSeconds} s in UNIX epoch)...`)
-
-    let newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDeadlineSeconds).send({from: requestCreator, gas: 200000, gasPrice: "1"})
-
-    let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`Request creation failed with status ${txStatus}`)
-        return -1
-    }
-    let requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as number
-    console.log(`New request created with ID ${requestID}.`)
-
-    await utils.waitForEnter("Press Enter to print events generated:")
-    checkForPendingEvents()
-    await utils.waitForEnter()
-    
-    let requestExtra = [requestStartSeconds, requestDurationMinutes, requestAuctionPrice].concat(requestInstantRentRules)
-    requestExtra.push(requestLockerID)
-
-    console.log(`3) Adding request extra to request with ID ${requestID}...`)
-    console.log(`Starting time: ${requestStart.toUTCString()}\nDuration (in minutes/hours/days): ${requestDurationMinutes}/${requestDurationMinutes/60}/${requestDurationMinutes/(60*24)}\nEnd time: ${new Date(requestStart.getTime()*1000 + requestDurationMinutes*60*1000).toUTCString()}\nCreator: ${requestCreator}\nLocker ID: ${requestLockerID}`)
-
-    let newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(requestID, requestExtra).send({from: requestCreator, gas: 1000000, gasPrice: "1"})
-
-    txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
-    if (txStatus != 0) {
-        console.error(`Request extra submission failed with status ${txStatus}`)
-        return -1
-    }
-
-    await utils.waitForEnter("Request creation complete! Press Enter to print events generated:")
-    checkForPendingEvents()
-    await utils.waitForEnter()
-
     return requestID
 }
 
-async function createTestOffer(requestID: number): Promise<number> {
-    const offerStartingTime = new Date("2021-01-05:00:00:00Z")
-    const offerStartingTimeSeconds = offerStartingTime.getTime() / 1000
-    const offerDurationMinutes = 21600                 // 15 days * 24 hours * 60 minutes
-    const offerAmount = offerDurationMinutes * 5000      // According to the pricing rules in the test request (HARDCODED)
-    const offerType = 1                         // Instant-rent offer
+function getInterledgerAuctionOffer1(requestDetails: utils.AuctionRequestCompleteDetails, creatorAccount: string): utils.AuctionOfferCompleteDetails {
+    const startTime = new Date("2021-01-05:00:00:00Z")
+    const durationInMinutes = new BN(21600)                    // 15 days * 24 hours * 60 minutes
+    const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
 
-    const offerCreator = (await web3MarketplaceInstance.eth.getAccounts())[9]
+    const newKeyPair = crypto.crypto_box_seed_keypair([1])
+    const encryptionKey = newKeyPair.boxPk
+    const decryptionKey = newKeyPair.boxSk
 
-    console.log(`4) Creating offer using Ethereum address: ${offerCreator}...`)
-    let newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID).send({from: offerCreator, gas: 200000, gasPrice: "1"})
+    return { startTime, durationInMinutes, amount, creatorAccount, encryptionKey, decryptionKey }
+}
+
+function getInterledgerAuctionOffer2(requestDetails: utils.AuctionRequestCompleteDetails, creatorAccount: string): utils.AuctionOfferCompleteDetails {
+    const startTime = new Date("2021-01-10:00:00:00Z")
+    const durationInMinutes = new BN(4320)                    // 3 days * 24 hours * 60 minutes
+    const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
+
+    const newKeyPair = crypto.crypto_box_seed_keypair([2])
+    const encryptionKey = newKeyPair.boxPk
+    const decryptionKey = newKeyPair.boxSk
+
+    return { startTime, durationInMinutes, amount, creatorAccount, encryptionKey, decryptionKey }
+}
+
+async function createInterledgerAuctionOffer(offerDetails: utils.AuctionOfferCompleteDetails, requestID: BN): Promise<BN> {
+
+    const newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID.toString()).send({from: offerDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
 
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        console.error(`Offer creation failed with status ${txStatus}`)
-        return -1
+        throw new Error(`Offer creation failed with status ${txStatus}`)
     }
-    let offerID = parseInt(newOfferTransactionResult.events!.OfferAdded.returnValues.offerID)
-    console.log(`New offer created with ID ${offerID}`)
+    const offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as BN
 
-    await utils.waitForEnter("Press Enter to print events generated:")
-    checkForPendingEvents()
-
-    await utils.waitForEnter("5) Generating new Curve25519 keypair for JWT encryption. Press Enter to continue:")
-
-    let newKeyPair = crypto.crypto_box_keypair()
-    keys.set(offerID, [newKeyPair.boxSk, newKeyPair.boxPk])
-
-    let privateKeyEncoded = "0x" + crypto.to_hex(newKeyPair.boxSk)
-    let publicKeyEncoded = "0x" + crypto.to_hex(newKeyPair.boxPk)
-    console.log({private: privateKeyEncoded, public: publicKeyEncoded})
-
-    await utils.waitForEnter()
-
-    let offerExtra = [offerStartingTimeSeconds, offerDurationMinutes, offerType, publicKeyEncoded] as any[]
-
-    console.log(`5) Adding offer extra to offer with ID ${offerID}...`)
-    console.log(`Starting time: ${offerStartingTime.toUTCString()}\nDuration (in minutes/hours/days): ${offerDurationMinutes}/${offerDurationMinutes/60}/${offerDurationMinutes/(60*24)}\nEnd time: ${new Date(offerStartingTime.getTime()*1000 + offerDurationMinutes*60*1000).toUTCString()}\nCreator: ${offerCreator}\nJWT encryption key: ${publicKeyEncoded}`)
-
-    let newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID, offerExtra).send({from: offerCreator, gas: 1000000, value: offerAmount, gasPrice: "1"})
+    debug && console.log(`Offer submitted with ID: ${offerID}`)
+    
+    // Automatically isntant-rent offer
+    const offerExtra = [offerDetails.startTime.getTime()/1000, offerDetails.durationInMinutes.toString(), 0, "0x" + crypto.to_hex(offerDetails.encryptionKey)]
+    debug && console.log(`Submitting offer extra [${offerExtra}]...`)
+    const newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(offerID.toString(), offerExtra).send({from: offerDetails.creatorAccount, gas: 2000000, gasPrice: "1", value: offerDetails.amount.toString()})
 
     if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
         // All good
-        console.log("Offer created!")
-        await utils.waitForEnter("Press Enter to print events generated:")
-        checkForPendingEvents()
-        await utils.waitForEnter()
-        return offerID
+        debug && console.log(`Offer extra submitted for ID: ${offerID}`)
     } else {
         txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
         if (txStatus != 0) {
-            console.error(`Offer creation failed with status ${txStatus}`)
-            return -1
+            throw new Error(`Offer creation failed with status ${txStatus}`)
         } else {
-            await utils.waitForEnter("Press Enter to print events generated:")
-            checkForPendingEvents()
-            await utils.waitForEnter()
-            return offerID
+            debug && console.log(`Offer extra submitted for ID: ${offerID}`)
         }
     } 
+
+    keys.set(offerID.toString(), [offerDetails.decryptionKey, offerDetails.encryptionKey])
+    
+    return offerID
 }
 
-async function moveMoney(): Promise<void> {
-    if (unseenOfferFulfilledEvents.length == 0) {
-        console.log("No new offers have been fulfilled since last time. No money is claimed.")
-        return
-    }
-
-    let fulfilledOfferIDs = unseenOfferFulfilledEvents.map(offDetails => offDetails.returnValues.offerID)
-    console.log("Offers fulfilled:")
-    console.log(fulfilledOfferIDs)
-
-    await utils.waitForEnter()
-
-    for (let offerID of fulfilledOfferIDs) {
-        console.log(`Fetching details from smart contract about offer ${offerID}...`)
-        let offerDetails = await SMAUGMarketplaceInstance.methods.getOffer(offerID).call()
-        let offerExtraDetails = await SMAUGMarketplaceInstance.methods.getOfferExtra(offerID).call()
-        console.log(`Offer maker: ${offerDetails.offerMaker}`)
-        console.log(`Offer encryption key: ${Web3.utils.toHex(offerExtraDetails.offerCreatorEncryptionKey)}`)
-        console.log(`Offer value: ${offerExtraDetails.priceOffered} wei`)
-
-        console.log()
-
-        let requestID = offerDetails.requestID
-        let requestDetails = await SMAUGMarketplaceInstance.methods.getRequest(requestID).call()
-        let requestCreator = requestDetails.requestMaker
-        console.log(`Request ID: ${requestID}`)
-        console.log(`Request maker: ${requestDetails.requestMaker}`)
-
-        await utils.waitForEnter()
-
-        await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
-
-        console.log(`Claiming money (${offerExtraDetails.priceOffered} wei) from the request creator ${requestCreator}.`)
-        let moneyClaimTransactionResult = await SMAUGMarketplaceInstance.methods.withdraw(offerID).send({from: requestCreator, gasPrice: "1"})
-
-        let txStatus = (moneyClaimTransactionResult.events!.FunctionStatus.returnValues.status) as number
-        if (txStatus != 0) {
-            console.error(`Offer creation failed with status ${txStatus}`)
-            return
-        }
-        console.log("Money claimed.")
-
-        await utils.waitForEnter()
-        await getAndPrintAccountsAndBalances(web3MarketplaceInstance)
-    }
-
-    await utils.waitForEnter()
-}
-
-function checkForPendingEvents() {
-    if (unseenEvents.length == 0) {
-        console.log("No pending events.")
-        return
-    }
-
-    console.log("Events emitted:")
-    console.log(unseenEvents)
-    unseenEvents = []
-}
-
-function printNewOffersFulfilled(force: boolean = false) {
+function printNewOffersFulfilled() {
     if (unseenOfferFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
         unseenOfferFulfilledEvents.forEach((offer, index) => {
             console.log(`${index+1}`)
             console.log(`Offer ID: ${offer.returnValues.offerID}`)
             console.log(`Encrypted token: ${offer.returnValues.token}`)
-            let offerKeypair = keys.get(parseInt(offer.returnValues.offerID))
+            let offerKeypair = keys.get(offer.returnValues.offerID)
             // Token decoding and decryption
             let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
             let cipherText = utils.base64ToUint8Array(tokenDecoded)
@@ -802,19 +307,35 @@ function printNewOffersFulfilled(force: boolean = false) {
             console.log({header: jwtHeader, payload: jwtPayload})
         })
         unseenOfferFulfilledEvents = []
-    } else if (force) {     //unseenOfferFulfilledEvents.length == 0
+    } else {
         console.log("No new offers have been fulfilled!")
     }
 }
 
-function printNewOffersUnfulfilled(force: boolean = false) {
+function printNewOffersUnfulfilled() {
     if (unseenOfferUnFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
         unseenOfferUnFulfilledEvents.forEach((offer, index) => {
             console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
         })
         unseenOfferUnFulfilledEvents = []
-    } else if (force) {     //unseenOfferUnFulfilledEvents.length == 0
+    } else {
         console.log("No new offers have not been fulfilled!")
     }
+}
+
+function checkForPendingEvents() {
+    if (unseenEvents.length == 0) {
+        console.log("No pending events.")
+        return
+    }
+
+    console.log("Events emitted:")
+    console.log(unseenEvents)
+    unseenEvents = []
+}
+
+function flipDebug() {
+    debug = !debug
+    console.log(`Debug switch now ${debug ? "ON" : "OFF"}!`)
 }
