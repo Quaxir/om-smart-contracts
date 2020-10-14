@@ -38,4 +38,5 @@ export interface EnvVariables {
     ethereumMPAddress: string,
     MPOwner: string,
     MPBackendAddress: string,
+    MPBackendHost?: string
 }

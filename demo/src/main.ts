@@ -28,6 +28,7 @@ main().catch(error => {
 var web3MarketplaceInstance: Web3
 var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
+var backendHost: string | undefined
 
 var openRequests: Set<number>
 var unseenEvents: EventLog[]
@@ -50,6 +51,7 @@ async function main() {
 
     web3MarketplaceInstance = new Web3(variables.ethereumMPAddress)
     SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(variables.MPABIPath).toString()), variables.MPAddress) as any) as SMAUGMarketplace
+    backendHost = variables.MPBackendHost
 
     printArgumentsDetails(variables)
 
@@ -72,6 +74,7 @@ function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): utils.EnvVa
     const ethereumMPAddress = process.env["ETHEREUM_MP_ADDRESS"] as string
     const MPOwner = process.env["MP_OWNER"] as string
     const MPBackendAddress = process.env["MP_BACKEND_ADDRESS"] as string
+    const MPBackendHost = process.env["MP_BACKEND_HOST"] as string              // Optional
 
     if (MPAddress == undefined) {
         console.error("MP_ADDRESS env variable missing.")
@@ -94,7 +97,7 @@ function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): utils.EnvVa
         sys.exit(1)
     }
     
-    return { MPAddress, MPABIPath, ethereumMPAddress, MPOwner, MPBackendAddress }
+    return { MPAddress, MPABIPath, ethereumMPAddress, MPOwner, MPBackendAddress, MPBackendHost }
 }
 
 function printArgumentsDetails(options: utils.EnvVariables) {
@@ -233,7 +236,8 @@ async function handleRequestCreation(): Promise<void> {
     const backendEndpoint = getBackendEndpoint(requestDetails.creatorAccount)
     console.log(`Requesting new access token from marketplace backend at ${backendEndpoint}...`)
 
-    let requestCreationTokenResponse = await fetch(backendEndpoint)
+    let requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
+    let requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
     let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
     console.log("Request token obtained from backend:")
     // Hard-coded values, but it works
@@ -604,7 +608,8 @@ async function createTestRequest(): Promise<number> {
     const backendEndpoint = getBackendEndpoint(requestCreator)
     console.log(`1) Requesting new access token from marketplace backend at ${backendEndpoint}...`)
 
-    let requestCreationTokenResponse = await fetch(backendEndpoint)
+    let requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
+    let requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
     let requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
     console.log("Request token obtained from backend:")
     // Hard-coded values, but it works
