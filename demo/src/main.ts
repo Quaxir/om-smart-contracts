@@ -171,7 +171,8 @@ async function getAndPrintAccountsAndBalances(web3Instance: Web3): Promise<[stri
 }
 
 async function triggerInterledger(): Promise<void> {
-    console.log("Preparing system for Interledger operation...")
+
+    // On a freshly-started Docker Compose environment, this batch of operations takes ~ 1s to complete, so delay is not even noticeable
 
     const testRequestCreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]
     const testRequestDetails = await getInterledgerAuctionRequest(testRequestCreatorAccount)
@@ -183,7 +184,20 @@ async function triggerInterledger(): Promise<void> {
     const testOffer1ID = await createInterledgerAuctionOffer(testOffer1Details, testRequestID)
     const testOffer2ID = await createInterledgerAuctionOffer(testOffer2Details, testRequestID)
 
-    console.log("System ready for Interledger operation.")
+    console.log("Request pending decision:\n")
+    console.log(`Request ${testRequestID})`)
+    console.log(utils.requestToString(testRequestDetails))
+    await utils.waitForEnter()
+
+    console.log("Offers made:")
+    console.log(`Offer ${testOffer1ID})`)
+    console.log(utils.offerToString(testOffer1Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
+    console.log("*****")
+    console.log(`Offer ${testOffer2ID})`)
+    console.log(utils.offerToString(testOffer2Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
+    await utils.waitForEnter()
+
+    //TODO: Decide one request and show Interledger logs
 }
 
 function getInterledgerAuctionRequest(creatorAccount: string): utils.AuctionRequestCompleteDetails {
