@@ -332,7 +332,7 @@ async function decideTestAuctionRequest(requestDetails: utils.AuctionRequestComp
         throw new Error(`Request decision failed with status ${txStatus}`)
     }
 
-    debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}]`)
+    debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}] and Interledger process triggered.`)
 }
 
 function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
@@ -355,7 +355,7 @@ function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
             console.log("- JWT:")
             console.log({header: jwtHeader, payload: jwtPayload})
 
-            if (index == unseenOfferFulfilledEvents.length-1) {
+            if (index < unseenOfferFulfilledEvents.length-1) {
                 console.log("*****")
             }
         })
