@@ -10,7 +10,6 @@ import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
-import { resolve } from "path"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -51,7 +50,7 @@ async function main(): Promise<void> {
     try {
         backendURL = new URL(variables.MPBackendAddress)
     } catch(err){
-        throw Error("Marketplace URL is not a valid URL.")
+        throw new Error("Marketplace URL is not a valid URL.")
     }
 
     web3MarketplaceInstance = new Web3(variables.ethereumMPAddress)
@@ -73,7 +72,7 @@ function configureEventListener(debug: boolean = false) {
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
             if (error != null) {
-                console.log(`${error.name}\n${error.message}`)
+                console.error(`${error.name}\n${error.message}`)
             } else {
                 console.log(`\nEvent ${event.event} received!`)
                 console.log(event)
