@@ -125,7 +125,7 @@ export function requestToString(details: AuctionRequestCompleteDetails): string 
     return `
         - DEADLINE: ${details.deadline.toUTCString()}\n
         - START TIME: ${details.startTime.toUTCString()}\n
-        - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber())}\n
+        - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber()).toUTCString()}\n
         - MIN AUCTION PRICE/MINUTE: ${details.minAuctionPricePerMinute.toString()} wei\n
         - LOCKER ID: ${details.lockerID.toString()}\n
         - CREATOR ACCOUNT: ${details.creatorAccount}
@@ -145,7 +145,7 @@ export function offerToString(details: AuctionOfferCompleteDetails, encodeFuncti
     const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
     return `
         - START TIME: ${details.startTime.toUTCString()}\n
-        - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber())}\n
+        - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber()).toUTCString()}\n
         - TOTAL AMOUNT PAID: ${details.amount.toString()} wei\n
         - ENCRYPTION KEY: ${encodeFunction(details.encryptionKey)}\n
         - CREATOR ACCOUNT: ${details.creatorAccount}

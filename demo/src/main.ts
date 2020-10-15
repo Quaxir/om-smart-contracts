@@ -10,6 +10,7 @@ import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
+import { resolve } from "path"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -138,12 +139,12 @@ async function handleUserInput(): Promise<void> {
                 await triggerInterledger(); break;
             }
             case "checkForOffersEvents": {
-                printNewOffersFulfilled()
-                printNewOffersUnfulfilled()
+                printNewOffersFulfilled(true)
+                printNewOffersUnfulfilled(true)
                 break
             }
             case "checkForPendingEvents": {
-                checkForPendingEvents(); break;
+                checkForEventsGenerated(true); break;
             }
             case "flipDebug": {
                 flipDebug(); break;
@@ -175,29 +176,40 @@ async function triggerInterledger(): Promise<void> {
     // On a freshly-started Docker Compose environment, this batch of operations takes ~ 1s to complete, so delay is not even noticeable
 
     const testRequestCreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]
-    const testRequestDetails = await getInterledgerAuctionRequest(testRequestCreatorAccount)
+    const testRequestDetails = getInterledgerAuctionRequest(testRequestCreatorAccount)
     const testRequestID = await createInterledgerAuctionRequest(testRequestDetails)
-    const testOffer1CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[8]
-    const testOffer1Details = await getInterledgerAuctionOffer1(testRequestDetails, testOffer1CreatorAccount)
-    const testOffer2CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[9]
-    const testOffer2Details = await getInterledgerAuctionOffer2(testRequestDetails, testOffer2CreatorAccount)
+    const testOffer1CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[7]
+    const testOffer1Details = getInterledgerAuctionOffer1(testRequestDetails, testOffer1CreatorAccount)
+    const testOffer2CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[8]
+    const testOffer2Details = getInterledgerAuctionOffer2(testRequestDetails, testOffer2CreatorAccount)
+    const testOffer3CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[9]
+    const testOffer3Details = getInterledgerAuctionOffer3(testRequestDetails, testOffer3CreatorAccount)
     const testOffer1ID = await createInterledgerAuctionOffer(testOffer1Details, testRequestID)
     const testOffer2ID = await createInterledgerAuctionOffer(testOffer2Details, testRequestID)
+    const testOffer3ID = await createInterledgerAuctionOffer(testOffer3Details, testRequestID)
 
-    console.log("Request pending decision:\n")
+    await utils.waitForEnter("Request pending decision:")
     console.log(`Request ${testRequestID})`)
     console.log(utils.requestToString(testRequestDetails))
-    await utils.waitForEnter()
 
-    console.log("Offers made:")
+    await utils.waitForEnter("Offers made:")
+
     console.log(`Offer ${testOffer1ID})`)
     console.log(utils.offerToString(testOffer1Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
     console.log("*****")
     console.log(`Offer ${testOffer2ID})`)
     console.log(utils.offerToString(testOffer2Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
-    await utils.waitForEnter()
+    console.log("*****")
+    console.log(`Offer ${testOffer3ID})`)
+    console.log(utils.offerToString(testOffer3Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
 
-    //TODO: Decide one request and show Interledger logs
+    await utils.waitForEnter(`Deciding request ${testRequestID} by selecting offers ${testOffer1ID} and ${testOffer3ID}:`)
+
+    unseenEvents = []                       // Clean unseen events, no interested in the ones generated before the interledger
+    await decideTestAuctionRequest(testRequestDetails, testRequestID, [testOffer1ID, testOffer3ID])
+    console.log("Request decided. Interledger event triggered.")
+    
+    await checkForEventsGenerated(true)
 }
 
 function getInterledgerAuctionRequest(creatorAccount: string): utils.AuctionRequestCompleteDetails {
@@ -266,6 +278,18 @@ function getInterledgerAuctionOffer2(requestDetails: utils.AuctionRequestComplet
     return { startTime, durationInMinutes, amount, creatorAccount, encryptionKey, decryptionKey }
 }
 
+function getInterledgerAuctionOffer3(requestDetails: utils.AuctionRequestCompleteDetails, creatorAccount: string): utils.AuctionOfferCompleteDetails {
+    const startTime = new Date("2021-01-20:00:00:00Z")
+    const durationInMinutes = new BN(14400)                    // 10 days * 24 hours * 60 minutes
+    const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
+
+    const newKeyPair = crypto.crypto_box_seed_keypair([3])
+    const encryptionKey = newKeyPair.boxPk
+    const decryptionKey = newKeyPair.boxSk
+
+    return { startTime, durationInMinutes, amount, creatorAccount, encryptionKey, decryptionKey }
+}
+
 async function createInterledgerAuctionOffer(offerDetails: utils.AuctionOfferCompleteDetails, requestID: BN): Promise<BN> {
 
     const newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID.toString()).send({from: offerDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
@@ -300,53 +324,78 @@ async function createInterledgerAuctionOffer(offerDetails: utils.AuctionOfferCom
     return offerID
 }
 
-function printNewOffersFulfilled() {
+async function decideTestAuctionRequest(requestDetails: utils.AuctionRequestCompleteDetails, requestID: BN, winningOfferIDs: BN[]) {
+    const requestDecisonTransactionResult = await SMAUGMarketplaceInstance.methods.decideRequest(requestID.toString(), winningOfferIDs.map(offerID => offerID.toString())).send({from: requestDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
+
+    let txStatus = (requestDecisonTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Request decision failed with status ${txStatus}`)
+    }
+
+    debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}]`)
+}
+
+function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
     if (unseenOfferFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
         unseenOfferFulfilledEvents.forEach((offer, index) => {
-            console.log(`${index+1}`)
-            console.log(`Offer ID: ${offer.returnValues.offerID}`)
-            console.log(`Encrypted token: ${offer.returnValues.token}`)
+            console.log(`${index+1})`)
+            console.log(`- Offer ID: ${offer.returnValues.offerID}`)
+            console.log(`- Encrypted token: ${offer.returnValues.token}`)
             let offerKeypair = keys.get(offer.returnValues.offerID)
             // Token decoding and decryption
             let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
             let cipherText = utils.base64ToUint8Array(tokenDecoded)
             let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
             let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
-            console.log(`Decrypted token: ${decodedDecryptedToken}`)
+            console.log(`- Decrypted token: ${decodedDecryptedToken}`)
 
             let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
             let jwtPayload = jwtDecode(decodedDecryptedToken)
-            console.log("JWT:")
+            console.log("- JWT:")
             console.log({header: jwtHeader, payload: jwtPayload})
+
+            if (index == unseenOfferFulfilledEvents.length-1) {
+                console.log("*****")
+            }
         })
-        unseenOfferFulfilledEvents = []
+        if (cleanAfterPrint) {
+            unseenOfferFulfilledEvents = []
+        }
     } else {
         console.log("No new offers have been fulfilled!")
     }
 }
 
-function printNewOffersUnfulfilled() {
+function printNewOffersUnfulfilled(cleanAfterPrint: Boolean = false) {
     if (unseenOfferUnFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
         unseenOfferUnFulfilledEvents.forEach((offer, index) => {
             console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
         })
-        unseenOfferUnFulfilledEvents = []
+        if (cleanAfterPrint) {
+            unseenOfferUnFulfilledEvents = []
+        }
     } else {
         console.log("No new offers have not been fulfilled!")
     }
 }
 
-function checkForPendingEvents() {
+function checkForEventsGenerated(cleanAfterPrint: Boolean = false) {
     if (unseenEvents.length == 0) {
         console.log("No pending events.")
         return
     }
 
     console.log("Events emitted:")
-    console.log(unseenEvents)
-    unseenEvents = []
+
+    unseenEvents.forEach((event, index) => {
+        console.log(event)
+    })
+
+    if (cleanAfterPrint) {
+        unseenEvents = []
+    }
 }
 
 function flipDebug() {
