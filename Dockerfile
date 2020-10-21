@@ -4,4 +4,4 @@ FROM trufflesuite/ganache-cli:v6.10.2
 RUN mkdir -p /data
 COPY marketplace_state/ /data
 
-ENTRYPOINT [ "node", "/app/ganache-core.docker.cli.js", "--db", "/data", "--debug", "--verbose", "--allowUnlimitedContractSize", "--mnemonic", "main blouse fashion brand own rocket fluid notable vacuum gain guitar leaf", "-i", "666" ]
+ENTRYPOINT [ "node", "/app/ganache-core.docker.cli.js", "--db", "/data", "--allowUnlimitedContractSize", "--mnemonic", "main blouse fashion brand own rocket fluid notable vacuum gain guitar leaf", "-i", "666" ]
