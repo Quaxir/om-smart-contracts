@@ -207,8 +207,6 @@ async function triggerInterledger(): Promise<void> {
     unseenEvents = []                       // Clean unseen events, no interested in the ones generated before the interledger
     await decideTestAuctionRequest(testRequestDetails, testRequestID, [testOffer1ID, testOffer3ID])
     console.log("Request decided. Interledger event triggered.")
-    
-    await checkForEventsGenerated(true)
 }
 
 function getInterledgerAuctionRequest(creatorAccount: string): utils.AuctionRequestCompleteDetails {
