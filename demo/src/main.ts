@@ -177,11 +177,11 @@ async function triggerInterledger(): Promise<void> {
     const testRequestCreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]
     const testRequestDetails = getInterledgerAuctionRequest(testRequestCreatorAccount)
     const testRequestID = await createInterledgerAuctionRequest(testRequestDetails)
-    const testOffer1CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[7]
+    const testOffer1CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[6]
     const testOffer1Details = getInterledgerAuctionOffer1(testRequestDetails, testOffer1CreatorAccount)
-    const testOffer2CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[8]
+    const testOffer2CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[7]
     const testOffer2Details = getInterledgerAuctionOffer2(testRequestDetails, testOffer2CreatorAccount)
-    const testOffer3CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[9]
+    const testOffer3CreatorAccount = (await web3MarketplaceInstance.eth.getAccounts())[8]
     const testOffer3Details = getInterledgerAuctionOffer3(testRequestDetails, testOffer3CreatorAccount)
     const testOffer1ID = await createInterledgerAuctionOffer(testOffer1Details, testRequestID)
     const testOffer2ID = await createInterledgerAuctionOffer(testOffer2Details, testRequestID)
