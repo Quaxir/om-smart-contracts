@@ -2,6 +2,7 @@ pragma solidity ^0.5.0;
 
 import { InterledgerReceiverInterface } from "sofie-interledger-contracts/contracts/InterledgerReceiverInterface.sol";
 import { InterledgerSenderInterface } from "sofie-interledger-contracts/contracts/InterledgerSenderInterface.sol";
+import { ArrayRequestExtraData, ArrayOfferExtraData } from "sofie-offer-marketplace/contracts/interfaces/ArrayExtraData.sol";
 
 import { AbstractAuthorisedOwnerManageableMarketPlace } from "./abstract/AbstractAuthorisedOwnerManageableMarketPlace.sol";
 import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.sol";
@@ -12,7 +13,7 @@ import { UtilsLibrary } from "./libraries/UtilsLibrary.sol";
 @author Antonio Antonino <antonio.antonino@ericsson.com>
 @notice The smart contract implements an offer-based marketplace that allows both auction-based and instant-rent transactions between smart locker owner and smart locker renter.
 */
-contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, RequestArrayExtra, OfferArrayExtra, InterledgerSenderInterface, InterledgerReceiverInterface {
+contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, ArrayRequestExtraData, ArrayOfferExtraData, InterledgerSenderInterface, InterledgerReceiverInterface {
 
     event OfferClaimable(uint indexed offerID);
     event OfferFulfilled(uint indexed offerID, bytes token);
@@ -288,7 +289,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Reque
         return status;
     }
 
-    function checkIntegrityOfAcceptedOffersList(uint requestIdentifier, uint[] memory acceptedOfferIDs) private returns (bool isOffersListValid) {
+    function checkIntegrityOfAcceptedOffersList(uint requestIdentifier, uint[] memory acceptedOfferIDs) private view returns (bool isOffersListValid) {
         for (uint j = 0; j < acceptedOfferIDs.length; j++) {
             if (offers[acceptedOfferIDs[j]].requestID != requestIdentifier) {
                 return false;

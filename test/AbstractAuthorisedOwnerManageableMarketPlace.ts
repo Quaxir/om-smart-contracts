@@ -10,27 +10,11 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
     const SMAUGMarketplaceABI = SMAUGMarketPlaceABIFile.abi as AbiItem[]
     const submitRequestMethodName = "submitRequest"
 
-    it("AuthorisedManageableMarketPlace interface conformance", async () => {
-        let contract = await SMAUGMarketPlace.deployed()
-        let interfaceFunctions = [
-            "submitRequest(bytes32,bytes,bytes32,uint256)",     //If using AccessToken struct -> submitRequest((bytes32,bytes,bytes32),uint256)
-            "closeRequest(uint256)",
-            "decideRequest(uint256,uint256[])",
-            "deleteRequest(uint256)"
-        ]
-
-        let interfaceID = interfaceFunctions.map(web3.eth.abi.encodeFunctionSignature).map((x) => parseInt(x as string, 16)).reduce((x, y) => x ^ y)
-        interfaceID = interfaceID > 0 ? interfaceID : 0xFFFFFFFF + interfaceID + 1
-        let interfaceIDString = "0x" + interfaceID.toString(16)
-        let isContractCompliantToInterface = await contract.supportsInterface(web3.utils.hexToBytes(interfaceIDString))
-        assert.equal(isContractCompliantToInterface, true, "Contract should support the AuthorisedManageableMarketPlace interface.")
-    })
-
     it("getMarketInformation", async () => {
         let owner = accounts[0]
         let contract = await SMAUGMarketPlace.new({from: owner})
 
-        let ownerAddress = await contract.getMarketInformation().ownerAddress as string
+        let ownerAddress = (await contract.getMarketInformation()).ownerAddress as string
         assert.equal(ownerAddress, ownerAddress, "Wrong marketplace info returned.")
     })
     
@@ -134,5 +118,63 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
         tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 1, "Request submission should fail because access token has not been issued by a manager of the contract.")
+    })
+
+    it("settleTrade()", async () => {
+        let owner = accounts[0]
+        let requestCreator = accounts[1]
+        let offerCreator = accounts[2]
+        let contract = await SMAUGMarketPlace.new({from: owner})
+
+        // Valid flow
+
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestID = tx.logs[1].args.requestID.toNumber()
+        await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
+        tx = await contract.submitOffer(requestID, {from: offerCreator})
+        let offerID = tx.logs[1].args.offerID.toNumber()
+        let offerDID = 1
+        let offerValue = 1
+        tx = await contract.submitOfferArrayExtra(offerID, [1, 1, 0, offerDID], {from: offerCreator, value: `${offerValue}`})
+        await contract.decideRequest(requestID, [offerID], {from: requestCreator})
+
+        // Assuming the Interledger event is triggered and that the JWT is properly logged and delivered to the user, the user will call the trade settlement interface
+
+        tx = await contract.settleTrade(requestID, offerID, {from: offerCreator})
+        let tradeSettledEvent = tx.logs[0]
+        let eventRequestID = tradeSettledEvent.args.requestID.toNumber()
+        assert.equal(eventRequestID, requestID, "requestID of trade settlment event not right.")
+        let eventOfferID = tradeSettledEvent.args.offerID.toNumber()
+        assert.equal(eventOfferID, offerID, "offerID of trade settlment event not right.")
+
+        // Trade for request not existing
+
+        tx = await contract.settleTrade(999, offerID, {from: offerCreator})
+        tradeSettledEvent = tx.logs[0]
+        let status = tradeSettledEvent.args.status.toNumber()
+        assert.equal(status, 2, "settleTrade with not existing request should create FunctionStatus with value UndefinedID")
+
+        // Trade for offer not existing
+
+        tx = await contract.settleTrade(requestID, 999, {from: offerCreator})
+        tradeSettledEvent = tx.logs[0]
+        status = tradeSettledEvent.args.status.toNumber()
+        assert.equal(status, 2, "settleTrade with not existing offer should create FunctionStatus with value UndefinedID")
+
+        // Trade called by someone other than the offer creator
+
+        let unauthorisedCaller = accounts[3]
+        tx = await contract.settleTrade(requestID, offerID, {from: unauthorisedCaller})
+        tradeSettledEvent = tx.logs[0]
+        status = tradeSettledEvent.args.status.toNumber()
+        assert.equal(status, 1, "settleTrade with unauthorised caller should create FunctionStatus with value AccessDenied")
+
+        // Trade for an already settled offer
+
+        tx = await contract.settleTrade(requestID, offerID, {from: offerCreator})
+        tradeSettledEvent = tx.logs[0]
+        status = tradeSettledEvent.args.status.toNumber()
+        assert.equal(status, 14, "settleTrade with not existing offer should create FunctionStatus with value AlreadySettledOffer")
     })
 })

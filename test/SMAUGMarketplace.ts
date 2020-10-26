@@ -11,20 +11,6 @@ contract("SMAUGMarketPlace", async accounts => {
     const submitRequestMethodName = "submitRequest"
     const BN = web3.utils.BN
 
-    it("RequestArrayExtra interface conformance", async () => {
-        let contract = await SMAUGMarketPlace.deployed()
-        let interfaceMethodSelectorEncoded = web3.eth.abi.encodeFunctionSignature("submitRequestArrayExtra(uint256,uint256[])")
-        let isContractConformant = await contract.supportsInterface(web3.utils.hexToBytes(interfaceMethodSelectorEncoded))
-        assert.equal(isContractConformant, true, "Contract should support the RequestArrayExtra interface.")
-    })
-    
-    it("OfferArrayExtra interface conformance", async () => {
-        let contract = await SMAUGMarketPlace.deployed()
-        let interfaceMethodSelectorEncoded = web3.eth.abi.encodeFunctionSignature("submitOfferArrayExtra(uint256,uint256[])")
-        let isContractConformant = await contract.supportsInterface(web3.utils.hexToBytes(interfaceMethodSelectorEncoded))
-        assert.equal(isContractConformant, true, "Contract should support the OfferArrayExtra interface.")
-    })    
-
     it("getType", async () => {
         let contract = await SMAUGMarketPlace.deployed()
         let expectedType = "eu.sofie-iot.smaug-marketplace"
@@ -95,11 +81,11 @@ contract("SMAUGMarketPlace", async accounts => {
         await contract.submitOfferArrayExtra(offerID2, [2, 5, 0, offer2DID], {from: offerCreator, value: "5"})
         tx = await contract.decideRequest(requestID, [offerID1, offerID2], {from: requestCreator})
 
-        let offerDecisionInterledgerEventType = tx.logs[3].event
+        let offerDecisionInterledgerEventType = tx.logs[4].event
         assert.equal(offerDecisionInterledgerEventType, "InterledgerEventSending", "decideRequest() did not produce the expected interledger event.")
-        let offerDecisionInterledgerEventID = tx.logs[3].args.id
+        let offerDecisionInterledgerEventID = tx.logs[4].args.id
         assert.equal(0, offerDecisionInterledgerEventID, "Interledger event ID should have been of value 0.")
-        let offerDecisionInterledgerEventHexData = tx.logs[3].args.data.substr(2)
+        let offerDecisionInterledgerEventHexData = tx.logs[4].args.data.substr(2)
         let offer1AuthKeyByte = offerDecisionInterledgerEventHexData.substr(0, 2)
         let offer1IDInfo = offerDecisionInterledgerEventHexData.substr(2, 64)
         let offer1DIDInfo = offerDecisionInterledgerEventHexData.substr(66, 64)
@@ -316,9 +302,11 @@ contract("SMAUGMarketPlace", async accounts => {
         let offerRequestID = offerDetails.requestID.toNumber()
         let offerMaker = offerDetails.offerMaker
         let stage = offerDetails.stage
+        let isSettled = offerDetails.isSettled
         assert.equal(offerRequestID, requestID, "Wrong offerRequestID returned.")
         assert.equal(offerMaker, offerCreator, "Wrong offerMaker returned.")
         assert.equal(stage, 0, "Wrong stage returned.")
+        assert.equal(isSettled, false, "Wrong offer settled state returned.")
 
         // Offer for request not defined
 
@@ -432,7 +420,7 @@ contract("SMAUGMarketPlace", async accounts => {
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        let winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
+        let winningOfferIDs = tx.logs[5].args.winningOffersIDs.map(offerID => offerID.toNumber())
         assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
         assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
         let isRequestDecided = (await contract.isRequestDecided(requestID))[1]
@@ -470,7 +458,7 @@ contract("SMAUGMarketPlace", async accounts => {
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Offer extra submission should succeed.")
         contractBalanceAfterOffer = parseInt(await web3.eth.getBalance(contract.address))
-        winningOfferIDs = tx.logs[4].args.winningOffersIDs.map(offerID => offerID.toNumber())
+        winningOfferIDs = tx.logs[5].args.winningOffersIDs.map(offerID => offerID.toNumber())
         assert.equal(winningOfferIDs.length, 1, "Number of winning offer IDs should be 1.")
         assert.equal(winningOfferIDs[0], offerID, "The ID of the winning should match the ID of the instant rent offer made.")
         isRequestDecided = (await contract.isRequestDecided(requestID))[1]

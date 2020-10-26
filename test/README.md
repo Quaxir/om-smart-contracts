@@ -18,21 +18,19 @@ Normal method names: not tested.
 
 ## AbstractAuthorisedOwnerManageableMarketPlace (via SMAUGMarketPlace)
 
-*- AuthorisedManageableMarketPlace interface conformance*
-*- getMarketInformation()*
-*- resetAccessTokens()*
-*- submitRequest() & isRequestDefined() & getRequest() & getOpenRequestIdentifiers()*
+- *getMarketInformation()*
+- *resetAccessTokens()*
+- *submitRequest() & isRequestDefined() & getRequest() & getOpenRequestIdentifiers()*
+- *settleTrade()*
 
 ## SMAUGMarketPlace
 
-*- RequestArrayExtra interface conformance*
-*- OfferArrayExtra interface conformance*
-*- getType()*
-*- closeRequest() & getClosedRequestIdentifiers()*
-*- decideRequest() & isRequestDecided() & getRequestDecision()*
-*- deleteRequest()*
-*- submitRequestArrayExtra() & getRequestExtra()*
-*- submitOffer() & isOfferDefined() & getOffer() & getRequestOfferIDs()*
-*- submitOfferArrayExtra() & getOfferExtra()*
-*- interledgerReceive()*
-*- withdraw()*
+- *getType()*
+- *closeRequest() & getClosedRequestIdentifiers()*
+- *decideRequest() & isRequestDecided() & getRequestDecision()*
+- *deleteRequest()*
+- *submitRequestArrayExtra() & getRequestExtra()*
+- *submitOffer() & isOfferDefined() & getOffer() & getRequestOfferIDs()*
+- *submitOfferArrayExtra() & getOfferExtra()*
+- *interledgerReceive()*
+- *withdraw()*

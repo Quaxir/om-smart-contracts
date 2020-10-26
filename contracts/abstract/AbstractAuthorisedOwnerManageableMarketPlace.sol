@@ -16,6 +16,7 @@ contract AbstractAuthorisedOwnerManageableMarketPlace is
 AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace, SMAUGStatusCodes {
 
     event RequestDecided(uint requestID, uint[] winningOffersIDs);        // Event generated whenever the winning offers for a request are chosen
+    event RequestClosed(uint requestID);
 
     // Keeps track of what access tokens have been used already (to avoid token re-usage)
     mapping(bytes32 => bool) private usedTokens;
@@ -178,6 +179,7 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
                 delete openRequestIDs[openRequestIDs.length-1];
                 openRequestIDs.length--;
                 emit FunctionStatus(Successful);
+                emit RequestClosed(requestIdentifier);
                 return Successful;
             }
         }
@@ -188,6 +190,7 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
 
         request.acceptedOfferIDs = acceptedOfferIDs;
         request.isDecided = true;
+        request.decisionTime = now;
 
         emit FunctionStatus(Successful);
         emit RequestDecided(request.ID, acceptedOfferIDs);
@@ -243,6 +246,33 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
             }
         }
     }
+
+    // Override from AbstractMarketplace, since it does not provide restriction over who can call this function.
+    function settleTrade(uint requestID, uint offerID) public returns (uint8 status) {
+        (, bool isRequestDefined) = isRequestDefined(requestID);
+        if (!isRequestDefined) {
+            emit FunctionStatus(UndefinedID);
+            return UndefinedID;
+        }
+
+        (, bool isOfferDefined) = isOfferDefined(offerID);
+        if (!isOfferDefined) {
+            emit FunctionStatus(UndefinedID);
+            return UndefinedID;
+        }
+
+        if (offers[offerID].offerMaker != msg.sender) {
+            emit FunctionStatus(AccessDenied);
+            return AccessDenied;
+        }
+
+        if (offers[offerID].isSettled) {
+            emit FunctionStatus(AlreadySettledOffer);
+            return AlreadySettledOffer;
+        }
+
+        settleTradeInsecure(requestID, offerID);
+    }    
 
     /**
     @notice Get the marketplace information, i.e., the owner address of the marketplace.
