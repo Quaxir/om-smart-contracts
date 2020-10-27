@@ -69,6 +69,8 @@ function configureEventListener(debug: boolean = false) {
     debug && console.log("Configuring event listener...")
     SMAUGMarketplaceInstance.events
 
+    const interestingEvents = new Set(["RequestDecided", "InterledgerEventSending", "InterledgerEventAccepted", "OfferFulfilled", "OfferClaimable", "RequestClaimable"])
+
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
             if (error != null) {
@@ -89,7 +91,9 @@ function configureEventListener(debug: boolean = false) {
             let requestID = parseInt(castedEvent.returnValues.requestID)
             openRequests.delete(requestID)
         }
-        unseenEvents.push(event)
+        if (interestingEvents.has(event.event)) { 
+            unseenEvents.push(event)
+        }
     })
 
     debug && console.log("Event listener configured.")
@@ -187,12 +191,6 @@ async function triggerInterledger(): Promise<void> {
     const testOffer2ID = await createInterledgerAuctionOffer(testOffer2Details, testRequestID)
     const testOffer3ID = await createInterledgerAuctionOffer(testOffer3Details, testRequestID)
 
-    await utils.waitForEnter("Request pending decision:")
-    console.log(`Request ${testRequestID})`)
-    console.log(utils.requestToString(testRequestDetails))
-
-    await utils.waitForEnter("Offers made:")
-
     console.log(`Offer ${testOffer1ID})`)
     console.log(utils.offerToString(testOffer1Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
     console.log("*****")
@@ -202,9 +200,8 @@ async function triggerInterledger(): Promise<void> {
     console.log(`Offer ${testOffer3ID})`)
     console.log(utils.offerToString(testOffer3Details, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
 
-    await utils.waitForEnter(`Deciding request ${testRequestID} by selecting offers ${testOffer1ID} and ${testOffer3ID}:`)
+    await utils.waitForEnter(`Selecting offers [${testOffer1ID}, ${testOffer3ID}]:`)
 
-    unseenEvents = []                       // Clean unseen events, no interested in the ones generated before the interledger
     await decideTestAuctionRequest(testRequestDetails, testRequestID, [testOffer1ID, testOffer3ID])
     console.log("Request decided. Interledger event triggered.")
 }
@@ -345,11 +342,10 @@ function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
             let cipherText = utils.base64ToUint8Array(tokenDecoded)
             let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
             let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
-            console.log(`- Decrypted token: ${decodedDecryptedToken}`)
 
             let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
             let jwtPayload = jwtDecode(decodedDecryptedToken)
-            console.log("- JWT:")
+            console.log("- Decrypted and decoded token:")
             console.log({header: jwtHeader, payload: jwtPayload})
 
             if (index < unseenOfferFulfilledEvents.length-1) {
