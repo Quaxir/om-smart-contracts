@@ -20,7 +20,7 @@
         "@openzeppelin/contracts": "^2.5.0",
         "eth-crypto": "^1.8.0",
         "sofie-interledger-contracts": "^0.3.0",
-        "sofie-offer-marketplace": "^0.3.1"
+        "sofie-offer-marketplace": "^0.3.4"
     },
     "devDependencies": {
         "@types/bignumber.js": "^5.0.0",

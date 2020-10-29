@@ -8,7 +8,7 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
     const SMAUGMarketPlace = artifacts.require("SMAUGMarketPlace")
     const SMAUGMarketPlaceABIFile = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "build", "contracts", "SMAUGMarketPlace.json")).toString())
     const SMAUGMarketplaceABI = SMAUGMarketPlaceABIFile.abi as AbiItem[]
-    const submitRequestMethodName = "submitRequest"
+    const submitAuthorisedRequestMethodName = "submitAuthorisedRequest"
 
     it("getMarketInformation", async () => {
         let owner = accounts[0]
@@ -32,14 +32,14 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
 
         // Valid token generation and usage
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Request submission should succeed.")
         
         // Trying again with same token
 
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 101, "Request submission should fail because access token is re-used.")
 
@@ -51,12 +51,12 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
 
         // Re-trying with the previously used (and then cleaned) token
 
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 0, "Request submission should succeed because token storage has been cleaned.")
     })
 
-    it("submitRequest & isRequestDefined (AbstractMarketPlace) & getRequest (AbstractMarketPlace)", async () => {
+    it("submitAuthorisedRequest & isRequestDefined (AbstractMarketPlace) & getRequest (AbstractMarketPlace)", async () => {
         let owner = accounts[0]
         let requestCreator = accounts[1]
         let contract = await SMAUGMarketPlace.new({from: owner})
@@ -64,8 +64,8 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
     
         // Valid request creation (with valid access token)
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, givenRequestDeadline, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, givenRequestDeadline, {from: requestCreator})
         let txStatusCode = tx.logs[0].args.status.toNumber()
         let requestID = tx.logs[1].args.requestID.toNumber()
         assert.equal(txStatusCode, 0, "Request submission should succeed.")
@@ -83,7 +83,7 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
         
         // Trying again with same token
 
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 101, "Request submission should fail because access token is re-used.")
 
@@ -91,31 +91,31 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
 
         let alternativeFunctionName = "submitOffer"
         requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, alternativeFunctionName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 1, "Request submission should fail because access token is issued for a different method.")
 
         // Invalid token for a different user
 
         let alternativeRequestCreatorAddress = accounts[2]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: alternativeRequestCreatorAddress})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: alternativeRequestCreatorAddress})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 1, "Request submission should fail because access token is issued to a different user.")
 
         // Invalid token for a different contract address
 
         let alternativeContractAddress = accounts[3]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, alternativeContractAddress, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, alternativeContractAddress, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 1, "Request submission should fail because access token is issued for a different contract address.")
 
         // Invalid token from a different signer than a contract manager
 
         let alternativeSigner = accounts[4]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, alternativeSigner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, alternativeSigner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 1, "Request submission should fail because access token has not been issued by a manager of the contract.")
     })
@@ -128,8 +128,8 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
 
         // Valid flow
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})

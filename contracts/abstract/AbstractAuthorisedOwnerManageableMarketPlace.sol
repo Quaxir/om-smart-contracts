@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import { AbstractMarketPlace } from "sofie-offer-marketplace/contracts/abstract/AbstractMarketPlace.sol";
+import { AbstractOwnerManagerMarketPlace } from "sofie-offer-marketplace/contracts/abstract/AbstractOwnerManagerMarketPlace.sol";
 import { MultiManagersBaseContract } from "sofie-offer-marketplace/contracts/base/MultiManagersBaseContract.sol";
 
 import { AuthorisedManageableMarketPlace } from "../interfaces/AuthorisedManageableMarketPlace.sol";
@@ -8,30 +8,23 @@ import { SMAUGStatusCodes } from "../SMAUGStatusCodes.sol";
 import { AccessTokenLibrary } from "../libraries/AccessTokenLibrary.sol";
 
 /**
-@notice An abstract contract implementing the `AuthorisedManageableMarketPlace`, `AbstractMarketPlace` and `MultiManagersBaseContract` contract from the SOFIE Marketplace component. The contract extends the functionality of request creation by requiring the presentation of a valid access token by the calling entity.
+@notice An abstract contract implementing the `AuthorisedManageableMarketPlace` and `MultiManagersBaseContract` contract from the SOFIE Marketplace component. The contract extends the functionality of request creation by requiring the presentation of a valid access token by the calling entity.
 @author Antonio Antonino <antonio.antonino@ericsson.com>
 @dev The contract is abstract, so it can only be instantiated via one of its subclasses. As of today, the only known subclass is `SMAUGMarketPlace.sol`.
 */
 contract AbstractAuthorisedOwnerManageableMarketPlace is
-AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace, SMAUGStatusCodes {
-
-    event RequestDecided(uint requestID, uint[] winningOffersIDs);        // Event generated whenever the winning offers for a request are chosen
-    event RequestClosed(uint requestID);
+AbstractOwnerManagerMarketPlace, AuthorisedManageableMarketPlace, SMAUGStatusCodes {
 
     // Keeps track of what access tokens have been used already (to avoid token re-usage)
     mapping(bytes32 => bool) private usedTokens;
     bytes32[] private tokenReferences;
 
     /**
-    @notice Provides initialisation instructions for all subclassing contracts. It registers the management interface conformance (submitRequest, closeRequest, decideRequest, deleteRequest).
+    @notice Provides initialisation instructions for all subclassing contracts. It registers the authorised management interface conformance (submitAuthorisedRequest).
     @dev Interface compliance follows the ERC165 standard.
     */
-    constructor() AbstractMarketPlace() MultiManagersBaseContract(msg.sender) public {
-        _registerInterface(this.submitRequest.selector ^
-                            this.closeRequest.selector ^
-                            this.decideRequest.selector ^
-                            this.deleteRequest.selector
-        );
+    constructor() public {
+        _registerInterface(this.submitAuthorisedRequest.selector);
     }
 
     /**
@@ -54,19 +47,6 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         emit FunctionStatus(Successful);
     }
 
-    function finishSubmitRequestExtra(uint requestIdentifier) internal returns (uint8 status, uint requestID) {
-        openRequest(requestIdentifier);
-
-        emit FunctionStatus(Successful);
-        emit RequestExtraAdded(requestIdentifier);
-        return (Successful, requestIdentifier);
-    }
-
-    function openRequest(uint requestIdentifier) internal {
-        requests[requestIdentifier].reqStage = Stage.Open;
-        openRequestIDs.push(requests[requestIdentifier].ID);
-    }
-
     /**
     @notice Create a new a request.
     @param tokenDigest The digest of the access token used to invoke this function.
@@ -84,12 +64,12 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
     This operation will create a request which is pending (not open), meaning that to be considered by potential offer creators the request creator must also submit the extra information by calling `submitRequestArrayExtra`.
     @return The tuple (status, requestID) where status is the status code of the transaction, and requestID is the request ID created by the smart contract.
     */
-    function submitRequest
+    function submitAuthorisedRequest
         (bytes32 tokenDigest, bytes memory signature, bytes32 nonce, uint deadline)
         public returns (uint8 status, uint requestID) {
 
             bool isTokenValid = isValidAccessTokenForFunctionAndNonce(
-                tokenDigest, signature, nonce, this.submitRequest.selector, msg.sender, address(this)
+                tokenDigest, signature, nonce, this.submitAuthorisedRequest.selector, msg.sender, address(this)
             );
 
             if (!isTokenValid) {
@@ -155,46 +135,18 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
             emit FunctionStatus(AccessDenied);
             return (AccessDenied);
         }
+        
+        // This control is missing in the SOFIE smart contract
+        if(request.reqStage != Stage.Open) {
+            emit FunctionStatus(RequestNotOpen);
+            return RequestNotOpen;
+        }
 
-        return closeRequestInsecure(request);
+        return closeRequestInsecure(requestIdentifier);
     }
 
     function isRequestCreator(Request storage request, address _address) internal view returns (bool) {
         return request.requestMaker == _address;
-    }
-
-    function closeRequestInsecure(Request storage request) internal returns (uint8 status) {
-        uint requestIdentifier = request.ID;
-
-        request.reqStage = Stage.Closed;
-        request.closingBlock = block.number;
-
-        closedRequestIDs.push(requestIdentifier);
-
-        for (uint j = 0; j < openRequestIDs.length; j++) {
-            if (openRequestIDs[j] == requestIdentifier) {
-                for (uint i = j; i < openRequestIDs.length - 1; i++){
-                    openRequestIDs[i] = openRequestIDs[i+1];
-                }
-                delete openRequestIDs[openRequestIDs.length-1];
-                openRequestIDs.length--;
-                emit FunctionStatus(Successful);
-                emit RequestClosed(requestIdentifier);
-                return Successful;
-            }
-        }
-    }
-
-    function decideRequestInsecure(Request storage request, uint[] memory acceptedOfferIDs) internal returns (uint8 status) {
-        closeRequestInsecure(request);
-
-        request.acceptedOfferIDs = acceptedOfferIDs;
-        request.isDecided = true;
-        request.decisionTime = now;
-
-        emit FunctionStatus(Successful);
-        emit RequestDecided(request.ID, acceptedOfferIDs);
-        return Successful;
     }
 
     function deleteRequest(uint requestIdentifier) public returns (uint8 status) {
@@ -222,29 +174,7 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
             return NotTimeForDeletion;
         }
 
-        return deleteRequestInsecure(request);
-    }
-
-    function deleteRequestInsecure(Request storage request) internal returns (uint8 status) {
-        for (uint k = 0; k < request.offerIDs.length; k++) {
-            delete offers[request.offerIDs[k]];
-        }
-
-        uint requestID = request.ID;
-
-        delete requests[requestID];
-
-        for (uint j = 0; j < closedRequestIDs.length; j++) {
-            if (closedRequestIDs[j] == requestID) {
-                for (uint i = j; i < closedRequestIDs.length - 1; i++){
-                    closedRequestIDs[i] = closedRequestIDs[i+1];
-                }
-                delete closedRequestIDs[closedRequestIDs.length-1];
-                closedRequestIDs.length--;
-                emit FunctionStatus(Successful);
-                return Successful;
-            }
-        }
+        return deleteRequestInsecure(requestIdentifier);
     }
 
     // Override from AbstractMarketplace, since it does not provide restriction over who can call this function.
@@ -272,13 +202,10 @@ AbstractMarketPlace, MultiManagersBaseContract, AuthorisedManageableMarketPlace,
         }
 
         settleTradeInsecure(requestID, offerID);
-    }    
+    }
 
-    /**
-    @notice Get the marketplace information, i.e., the owner address of the marketplace.
-    @return The tuple (status, ownerAddress) where status is the status code of the transaction, and ownerAddress is the owner of the marketplace.
-    */
-    function getMarketInformation() public view returns (uint8 status, address ownerAddress) {
-        return (Successful, owner());
+    function settleTradeInsecure(uint requestID, uint offerID) internal returns (uint8 status) {
+        offers[offerID].isSettled = true;
+        super.settleTradeInsecure(requestID, offerID);
     }
 }

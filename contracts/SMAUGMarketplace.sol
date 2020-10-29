@@ -5,7 +5,6 @@ import { InterledgerSenderInterface } from "sofie-interledger-contracts/contract
 import { ArrayRequestExtraData, ArrayOfferExtraData } from "sofie-offer-marketplace/contracts/interfaces/ArrayExtraData.sol";
 
 import { AbstractAuthorisedOwnerManageableMarketPlace } from "./abstract/AbstractAuthorisedOwnerManageableMarketPlace.sol";
-import { RequestArrayExtra, OfferArrayExtra } from "./interfaces/ArrayExtraData.sol";
 import { UtilsLibrary } from "./libraries/UtilsLibrary.sol";
 
 /**
@@ -93,9 +92,13 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
     @notice Creates a new SMAUGMarketPlace instance and registers the submitRequestArrayExtra and submitOfferArrayExtra interface compliance.
     @dev Interface compliance follows the ERC165 standard.
     */
-    constructor() AbstractAuthorisedOwnerManageableMarketPlace() public {
+    constructor() public {
         _registerInterface(this.submitRequestArrayExtra.selector);
         _registerInterface(this.submitOfferArrayExtra.selector);
+    }
+
+    function submitRequest(uint deadline) public returns (uint8 status, uint requestID) {
+        revert("submitRequest not callable on this type of smart contracts. Please use submitAuthorisedRequest function.");
     }
 
     /**
@@ -279,11 +282,11 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
             return ImproperList;
         }
 
-        return decideRequestInsecure(request, acceptedOfferIDs);
+        return decideRequestInsecure(requestIdentifier, acceptedOfferIDs);
     }
 
-    function decideRequestInsecure(Request storage request, uint[] memory acceptedOfferIDs) internal returns (uint8) {
-        uint8 status = super.decideRequestInsecure(request, acceptedOfferIDs);
+    function decideRequestInsecure(uint requestIdentifier, uint[] memory acceptedOfferIDs) internal returns (uint8) {
+        uint8 status = super.decideRequestInsecure(requestIdentifier, acceptedOfferIDs);
         // Generate interledger event
         emitRequestDecisionInterledgerEvent(acceptedOfferIDs);
         return status;
@@ -307,80 +310,6 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
         }
 
         return true;
-    }
-
-    /**
-    @notice Close a request, stopping people from making offers, but withouth deciding the winning offers.
-    @param requestIdentifier The ID of the request.
-    @dev
-    The following requirements are to be met for a successful operation:
-        - the request must exist and must be in the correct state (e.g., not already closed in a previous operation).
-        - the caller of the decision operation must be the same that previously created the request.
-    @return The status code of the transaction.
-    */
-    function closeRequest(uint requestIdentifier) public returns (uint8 status) {
-        (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
-
-        if (!isRequestDefined) {
-            emit FunctionStatus(UndefinedID);
-            return UndefinedID;
-        }
-
-        Request storage request = requests[requestIdentifier];
-
-        bool isCallerRequestCreator = isRequestCreator(request, msg.sender);
-        if (!isCallerRequestCreator) {
-            emit FunctionStatus(AccessDenied);
-            return (AccessDenied);
-        }
-
-        // This control is missing in the SOFIE smart contract
-        if(request.reqStage != Stage.Open) {
-            emit FunctionStatus(RequestNotOpen);
-            return RequestNotOpen;
-        }
-
-        return super.closeRequestInsecure(request);
-    }
-
-    /**
-    @notice Deletes a request from the contract, freeing up space.
-    @param requestIdentifier The ID of the request.
-    @dev
-    The following requirements are to be met for a successful operation:
-        - the request must exist and must be in the correct state (e.g., already decided).
-        - the caller of the decision operation must be the same that previously created the request.
-        - the minimum time for deletion has passed since the request was closed.
-    @return The status code of the transaction.
-    */
-    function deleteRequest(uint requestIdentifier) public returns (uint8 status) {
-        (, bool isRequestDefined) = isRequestDefined(requestIdentifier);
-
-        if (!isRequestDefined) {
-            emit FunctionStatus(UndefinedID);
-            return UndefinedID;
-        }
-
-        Request storage request = requests[requestIdentifier];
-        bool isCallerRequestCreator = isRequestCreator(request, msg.sender);
-
-        if (!isCallerRequestCreator) {
-            emit FunctionStatus(AccessDenied);
-            return AccessDenied;
-        }
-
-        // This control is missing in the SOFIE smart contract
-        if(request.reqStage != Stage.Closed) {
-            emit FunctionStatus(ReqNotClosed);
-            return ReqNotClosed;
-        }
-
-        if(request.closingBlock + waitBeforeDeleteBlocks > block.number) {
-            emit FunctionStatus(NotTimeForDeletion);
-            return NotTimeForDeletion;
-        }
-
-        return super.deleteRequestInsecure(request);
     }
 
     /**
@@ -414,7 +343,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
             return (RequestNotOpen, 0);
         }
 
-        super.submitOffer(requestID);
+        return super.submitOffer(requestID);
     }
 
     /**
@@ -488,7 +417,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
         if (offerExtra.offerType == OfferType.InstantRent) {
             uint[] memory decidedOffers = new uint[](1);
             decidedOffers[0] = offerID;
-            uint8 _requestDecisionStatus = decideRequestInsecure(request, decidedOffers);
+            uint8 _requestDecisionStatus = decideRequestInsecure(request.ID, decidedOffers);
 
             require(
                 _requestDecisionStatus == Successful,

@@ -45,7 +45,7 @@
 
 //     function isOfferDefined(uint offerIdentifier) external view returns (uint8 status, bool);
 
-//     function getOffer(uint offerIdentifier) external view returns (uint8 status, uint requestID, address offerMaker, uint stage, bool isSettled);
+    // function getOffer(uint offerIdentifier) external view returns (uint8 status, uint requestID, address offerMaker, uint stage, bool isSettled);
 
 //     function submitOffer(uint requestID) external returns (uint8 status, uint offerID);
 
