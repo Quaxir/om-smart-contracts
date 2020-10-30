@@ -96,11 +96,7 @@ contract SMAUGMarketPlace is AbstractAuthorisedOwnerManageableMarketPlace, Array
         _registerInterface(this.submitRequestArrayExtra.selector);
         _registerInterface(this.submitOfferArrayExtra.selector);
     }
-
-    function submitRequest(uint deadline) public returns (uint8 status, uint requestID) {
-        revert("submitRequest not callable on this type of smart contracts. Please use submitAuthorisedRequest function.");
-    }
-
+    
     /**
     @notice Submit extra information for a previously-created request.
     @param requestID The ID of the request.

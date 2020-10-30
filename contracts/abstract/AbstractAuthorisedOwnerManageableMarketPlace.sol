@@ -18,6 +18,7 @@ AbstractOwnerManagerMarketPlace, AuthorisedManageableMarketPlace, SMAUGStatusCod
     // Keeps track of what access tokens have been used already (to avoid token re-usage)
     mapping(bytes32 => bool) private usedTokens;
     bytes32[] private tokenReferences;
+    mapping(uint => bool) private settledOffers;
 
     /**
     @notice Provides initialisation instructions for all subclassing contracts. It registers the authorised management interface conformance (submitAuthorisedRequest).
@@ -46,6 +47,10 @@ AbstractOwnerManagerMarketPlace, AuthorisedManageableMarketPlace, SMAUGStatusCod
 
         emit FunctionStatus(Successful);
     }
+
+    function submitRequest(uint deadline) public returns (uint8 status, uint requestID) {
+        revert("submitRequest not callable on this type of smart contracts. Please use submitAuthorisedRequest function.");
+    }    
 
     /**
     @notice Create a new a request.
@@ -196,7 +201,7 @@ AbstractOwnerManagerMarketPlace, AuthorisedManageableMarketPlace, SMAUGStatusCod
             return AccessDenied;
         }
 
-        if (offers[offerID].isSettled) {
+        if (settledOffers[offerID]) {
             emit FunctionStatus(AlreadySettledOffer);
             return AlreadySettledOffer;
         }
@@ -204,8 +209,8 @@ AbstractOwnerManagerMarketPlace, AuthorisedManageableMarketPlace, SMAUGStatusCod
         settleTradeInsecure(requestID, offerID);
     }
 
-    function settleTradeInsecure(uint requestID, uint offerID) internal returns (uint8 status) {
-        offers[offerID].isSettled = true;
+    function settleTradeInsecure(uint requestID, uint offerID) internal returns (uint8 /*status*/) {
+        settledOffers[offerID] = true;
         super.settleTradeInsecure(requestID, offerID);
     }
 }

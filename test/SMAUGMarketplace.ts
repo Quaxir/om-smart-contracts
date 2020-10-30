@@ -19,17 +19,6 @@ contract("SMAUGMarketPlace", async accounts => {
         assert.equal(marketType, expectedType, "Wrong marketplace type returned.")
     })
 
-    it("submitRequest", async() => {
-        let contract = await SMAUGMarketPlace.deployed()
-
-        try {
-            contract.submitRequest(10000000000)
-            assert.equal(true, false, "submitRequest should revert since it is not supported by SMAUGMarketPlace")
-        } catch {
-            assert.equal(true, true)
-        }
-    })
-
     it("closeRequest & getClosedRequestIdentifiers (AbstractMarketPlace)", async () => {
         let owner = accounts[0]
         let requestCreator = accounts[1]
@@ -313,11 +302,9 @@ contract("SMAUGMarketPlace", async accounts => {
         let offerRequestID = offerDetails.requestID.toNumber()
         let offerMaker = offerDetails.offerMaker
         let stage = offerDetails.stage
-        let isSettled = offerDetails.isSettled
         assert.equal(offerRequestID, requestID, "Wrong offerRequestID returned.")
         assert.equal(offerMaker, offerCreator, "Wrong offerMaker returned.")
         assert.equal(stage, 0, "Wrong stage returned.")
-        assert.equal(isSettled, false, "Wrong offer settled state returned.")
 
         // Offer for request not defined
 

@@ -175,6 +175,6 @@ contract("AbstractAuthorisedOwnerManageableMarketPlace", async accounts => {
         tx = await contract.settleTrade(requestID, offerID, {from: offerCreator})
         tradeSettledEvent = tx.logs[0]
         status = tradeSettledEvent.args.status.toNumber()
-        assert.equal(status, 14, "settleTrade with not existing offer should create FunctionStatus with value AlreadySettledOffer")
+        assert.equal(status, 108, "settleTrade with not existing offer should create FunctionStatus with value AlreadySettledOffer")
     })
 })

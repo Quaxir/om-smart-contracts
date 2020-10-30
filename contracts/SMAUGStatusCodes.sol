@@ -11,4 +11,5 @@ contract SMAUGStatusCodes is StatusCodes {
     uint8 constant internal PaymentNotExisting = 105;                       // Withdrawing money for an offer that is not claimable.
     uint8 constant internal PaymentNotResolved = 106;                       // Withdrawing money for an offer that has not yet been resolved (either winning or losing).
     uint8 constant internal EmptyInterledgerPayload = 107;                  // Empty interledger payload received.
+    uint8 constant internal AlreadySettledOffer = 108;                      // Settling an offer previously settled.
 }

@@ -26,7 +26,6 @@ Normal method names: not tested.
 ## SMAUGMarketPlace
 
 - *getType()*
-- *submitRequest()*
 - *closeRequest() & getClosedRequestIdentifiers()*
 - *decideRequest() & isRequestDecided() & getRequestDecision()*
 - *deleteRequest()*
