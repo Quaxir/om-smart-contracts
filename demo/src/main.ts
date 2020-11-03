@@ -228,7 +228,7 @@ async function createInterledgerAuctionRequest(requestDetails: utils.AuctionRequ
     const requestCreationToken = await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
     debug && console.log(requestCreationToken)
 
-    const newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDetails.deadline.getTime()/1000).send({from: requestDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
+    const newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitAuthorisedRequest(requestCreationToken.digest, requestCreationToken.signature, requestCreationToken.nonce, requestDetails.deadline.getTime()/1000).send({from: requestDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
 
     let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
