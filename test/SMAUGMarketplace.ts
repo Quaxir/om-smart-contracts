@@ -8,7 +8,7 @@ contract("SMAUGMarketPlace", async accounts => {
     const SMAUGMarketPlace = artifacts.require("SMAUGMarketPlace")
     const SMAUGMarketPlaceABIFile = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "build", "contracts", "SMAUGMarketPlace.json")).toString())
     const SMAUGMarketplaceABI = SMAUGMarketPlaceABIFile.abi as AbiItem[]
-    const submitRequestMethodName = "submitRequest"
+    const submitAuthorisedRequestMethodName = "submitAuthorisedRequest"
     const BN = web3.utils.BN
 
     it("getType", async () => {
@@ -26,8 +26,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid request closure
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.closeRequest(requestID, {from: requestCreator})
@@ -50,8 +50,8 @@ contract("SMAUGMarketPlace", async accounts => {
         // closeRequest() called by someone who is not the request creator
 
         let otherRequestCreator = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 10, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         tx = await contract.closeRequest(requestID, {from: otherRequestCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
@@ -66,8 +66,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid request decision
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 500, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -111,8 +111,8 @@ contract("SMAUGMarketPlace", async accounts => {
         // Unauthorised user to decide the request
 
         let anauthorisedUser = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.decideRequest(requestID, [], {from: anauthorisedUser})
@@ -128,8 +128,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid request deletion
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         await contract.closeRequest(requestID, {from: requestCreator})
@@ -149,8 +149,8 @@ contract("SMAUGMarketPlace", async accounts => {
         // Unauthorised user to decide the request
 
         let anauthorisedUser = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.deleteRequest(requestID, {from: anauthorisedUser})
@@ -159,8 +159,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Request not closed
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 100000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.deleteRequest(requestID, {from: requestCreator})
@@ -182,8 +182,8 @@ contract("SMAUGMarketPlace", async accounts => {
             [1, 50, 5, 40, 10, 30, 30, 20, 60, 10]
         ]
         for (let validPricingRule of validPricingRules) {
-            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-            let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+            let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
             let requestID = tx.logs[1].args.requestID.toNumber()
             tx = await contract.submitRequestArrayExtra(requestID, [1, 100, 1].concat(validPricingRule).concat([web3.utils.toBN(expectedlockerID)]), {from: requestCreator})
             let txStatusCode = tx.logs[0].args.status.toNumber()
@@ -216,8 +216,8 @@ contract("SMAUGMarketPlace", async accounts => {
         ]
 
         for (let invalidExtra of invalidExtras) {
-            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-            let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+            let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
             let requestID = tx.logs[1].args.requestID.toNumber()
             tx = await contract.submitRequestArrayExtra(requestID, invalidExtra, {from: requestCreator})
             let txStatusCode = tx.logs[0].args.status.toNumber()
@@ -226,16 +226,16 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Invalid request ID
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
         let tx = await contract.submitRequestArrayExtra(99999, [1, 1, 1, 1], {from: requestCreator})
         let txStatusCode = tx.logs[0].args.status.toNumber()
         assert.equal(txStatusCode, 2, "Request extra submission should fail because request does not exist.")
 
         // Request not pending
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
@@ -245,8 +245,8 @@ contract("SMAUGMarketPlace", async accounts => {
         // Request extra submitter != request creator
 
         let unauthorisedUser = accounts[2]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         tx = await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: unauthorisedUser})
         txStatusCode = tx.logs[0].args.status.toNumber()
@@ -254,8 +254,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Pricing rule extending beyong the request duration
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         let requestDuration = 1
         let pricingStartRange = 5
@@ -272,8 +272,8 @@ contract("SMAUGMarketPlace", async accounts => {
         ]
 
         for (let invalidPricingRule of invalidPricingRules) {
-            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-            let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
+            let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+            let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000, {from: requestCreator})
             let requestID = tx.logs[1].args.requestID.toNumber()
             tx = await contract.submitRequestArrayExtra(requestID, [1, 1, 1].concat(invalidPricingRule).concat([1]), {from: requestCreator})
             let txStatusCode = tx.logs[0].args.status.toNumber()
@@ -290,8 +290,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid offer creation
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -302,11 +302,9 @@ contract("SMAUGMarketPlace", async accounts => {
         let offerRequestID = offerDetails.requestID.toNumber()
         let offerMaker = offerDetails.offerMaker
         let stage = offerDetails.stage
-        let isSettled = offerDetails.isSettled
         assert.equal(offerRequestID, requestID, "Wrong offerRequestID returned.")
         assert.equal(offerMaker, offerCreator, "Wrong offerMaker returned.")
         assert.equal(stage, 0, "Wrong stage returned.")
-        assert.equal(isSettled, false, "Wrong offer settled state returned.")
 
         // Offer for request not defined
 
@@ -316,8 +314,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer for past deadline
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -326,8 +324,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer for not open request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         tx = await contract.submitOffer(requestID, {from: offerCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
@@ -342,8 +340,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid auction offer extra submission with no authentication key
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         let requestStartingTime = 1
         let requestDuration = 5
@@ -375,8 +373,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid auction offer extra submission with authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         requestStartingTime = 1
         requestDuration = 5
@@ -408,8 +406,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid instant rent offer extra submission with no authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -446,8 +444,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid instant rent offer extra submission with authentication key
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 5, 0, 1, 1, 1], {from: requestCreator})           // Instant rent costs 1 token/minute
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -491,8 +489,8 @@ contract("SMAUGMarketPlace", async accounts => {
             [1, 2, 3],
             [1, 2, 3, 4, 5, 6]
         ]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         for (let invalidExtra of invalidExtras) {
@@ -510,8 +508,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Undefined offer ID
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         contractBalanceBeforeOffer = parseInt(await web3.eth.getBalance(contract.address))
@@ -525,8 +523,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Not-pending offer
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -542,8 +540,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer extra creator != offer creator
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         let offerExtraCreator = accounts[9]
@@ -560,8 +558,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Not-open request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         tx = await contract.submitOffer(requestID, {from: offerCreator})
         txStatusCode = tx.logs[0].args.status.toNumber()
@@ -569,8 +567,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer start time < request start time
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         requestStartingTime = 1
         await contract.submitRequestArrayExtra(requestID, [requestStartingTime, 1, 1, 1], {from: requestCreator})
@@ -587,8 +585,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer end time > request end time
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         requestStartingTime = 1
         requestDuration = 5
@@ -606,8 +604,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Auction offer price < min price asked in the request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         let minAuctionPrice = 5
         await contract.submitRequestArrayExtra(requestID, [1, 1, minAuctionPrice, 1], {from: requestCreator})
@@ -625,8 +623,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Instant rent offer for auction-only request
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})             // Extra array length == 4 -> No pricing rule is specified -> Instant rent not supported
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -683,8 +681,8 @@ contract("SMAUGMarketPlace", async accounts => {
                 let offerPrice = offerDetails[i][1]
                 let expectedStatusCode = expectedStatusCodes[i]
 
-                requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-                tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
+                requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+                tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 2000000000, {from: requestCreator})
                 requestID = tx.logs[1].args.requestID.toNumber()
                 await contract.submitRequestArrayExtra(requestID, [1, 100, 1].concat(requestInstantRules).concat(1), {from: requestCreator})
                 tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -713,8 +711,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid flow
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -767,8 +765,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         const unauthorisedAddress = accounts[5]
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -790,8 +788,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Empty payload
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -807,8 +805,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Offer not defined
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -830,16 +828,16 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Two offers for two different requests
         
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
         offerID1 = tx.logs[1].args.offerID.toNumber()
         tx = await contract.submitOfferArrayExtra(offerID1, [1, 1, 0, 1], {from: offerCreator, value: "1"})
         await contract.decideRequest(requestID, [offerID1], {from: requestCreator})
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -868,8 +866,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Request not decided
 
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -898,8 +896,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         // Valid flow
 
-        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        let tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        let requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        let tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         let requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator1})
@@ -969,8 +967,8 @@ contract("SMAUGMarketPlace", async accounts => {
         // Payment pending (no officially closed)
 
         let offerCreator = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -990,8 +988,8 @@ contract("SMAUGMarketPlace", async accounts => {
 
         let unauthorisedUser = accounts[5]
         offerCreator = accounts[9]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})
@@ -1018,8 +1016,8 @@ contract("SMAUGMarketPlace", async accounts => {
         unauthorisedUser = accounts[5]
         offerCreator = accounts[9]
         offerCreator2 = accounts[7]
-        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitRequestMethodName, requestCreator, contract.address, web3, owner)
-        tx = await contract.submitRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
+        requestCreationAccessToken = await generateFunctionSignedTokenWithAccount(SMAUGMarketplaceABI, submitAuthorisedRequestMethodName, requestCreator, contract.address, web3, owner)
+        tx = await contract.submitAuthorisedRequest(requestCreationAccessToken.tokenDigest, requestCreationAccessToken.signature, requestCreationAccessToken.nonce, 1000000000000, {from: requestCreator})
         requestID = tx.logs[1].args.requestID.toNumber()
         await contract.submitRequestArrayExtra(requestID, [1, 1, 1, 1], {from: requestCreator})
         tx = await contract.submitOffer(requestID, {from: offerCreator})

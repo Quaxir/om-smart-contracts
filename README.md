@@ -6,8 +6,6 @@ This repo contains all the smart contracts that are under the control and are tr
 
 When the project is cloned for the first time, run `npm install`. This will install all the needed `npm` dependencies, as well as generate all the [Typechain](https://github.com/ethereum-ts/TypeChain) typescript bindings needed for development.
 
-> The SMAUG marketplace smart contract (`contracts/SMAUGMarketplace.sol`) extends the functionalities offered by some contracts in the SOFIE Marketplace component. Nevertheless, few needed fixes have been identified and reported to the component developers. Since those changes are required for SMAUG to work properly, until the marketplace contracts implement the needed changes, the "fixed" contracts must replace the ones in the SOFIE Marketplace node module previously installed with `npm install`. **To do so, replace some of the functions of `node_modules/sofie-offer-marketplace/contracts/abstract/AbstractMarketPlace.sol` with the functions defined in `contracts/sofie-om-tmp/AbstractMarketPlaceFixed2.sol` after uncommenting it. In the same way, replace the content of `node_modules/sofie-offer-marketplace/contracts/interfaces/MarketPlace.sol` and `node_modules/sofie-offer-marketplace/contracts/StatusCodes.sol`. with the fixed versions in `contracts/sofie-om-tmp/`** Once the content has been copied, re-comment the `AbstractMarketPlaceFixed.sol` file. This operation must be performed every time the content of the `sofie-offer-marketplace` is updated without the needed features.
-
 ## Compile the smart contracts
 
 From the root of the project, run `npm run build` to compile the smart contracts and their typescript typings.

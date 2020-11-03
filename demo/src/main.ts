@@ -32,10 +32,13 @@ var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
 var backendHost: string | undefined
 
-var openRequests: Set<number> = new Set()
 var unseenEvents: EventLog[] = []
 var unseenOfferFulfilledEvents: OfferFulfilled[] = []
 var unseenOfferUnFulfilledEvents: OfferClaimable[] = []
+var winningOffersDetails: Map<string, string> = new Map()           //offerID -> requestID
+
+var requests: Map<string, utils.AuctionRequestCompleteDetails> = new Map()
+var offers: Map<string, utils.AuctionOfferCompleteDetails> = new Map()
 
 var keys: Map<string, [Uint8Array, Uint8Array]> = new Map()     // offerID -> (secret key, public key)
 
@@ -87,9 +90,10 @@ function configureEventListener(debug: boolean = false) {
             let castedEvent = event as OfferClaimable
             unseenOfferUnFulfilledEvents.push(castedEvent)
         } else if (event.event == "RequestDecided") {
+            // To improve: update map of winningOfferID -> requestID for future trade settlment
             let castedEvent = event as RequestDecided
-            let requestID = parseInt(castedEvent.returnValues.requestID)
-            openRequests.delete(requestID)
+            const requestID = castedEvent.returnValues.requestID
+            castedEvent.returnValues.winningOffersIDs.forEach(offerID => winningOffersDetails.set(offerID, requestID))
         }
         if (interestingEvents.has(event.event)) { 
             unseenEvents.push(event)
@@ -142,8 +146,9 @@ async function handleUserInput(): Promise<void> {
                 await triggerInterledger(); break;
             }
             case "checkForOffersEvents": {
-                printNewOffersFulfilled(true)
+                printNewOffersFulfilled(false)
                 printNewOffersUnfulfilled(true)
+                await settleOffers(true)
                 break
             }
             case "checkForPendingEvents": {
@@ -245,6 +250,7 @@ async function createInterledgerAuctionRequest(requestDetails: utils.AuctionRequ
 
     debug && console.log(`Request extra submitted for ID: ${requestID}`)
     
+    requests.set(requestID.toString(), requestDetails)
     return requestID
 }
 
@@ -314,6 +320,7 @@ async function createInterledgerAuctionOffer(offerDetails: utils.AuctionOfferCom
     } 
 
     keys.set(offerID.toString(), [offerDetails.decryptionKey, offerDetails.encryptionKey])
+    offers.set(offerID.toString(), offerDetails)
     
     return offerID
 }
@@ -371,6 +378,37 @@ function printNewOffersUnfulfilled(cleanAfterPrint: Boolean = false) {
         }
     } else {
         console.log("No new offers have not been fulfilled!")
+    }
+}
+
+async function settleOffers(cleanAfterPrint: Boolean = false) {
+    if (winningOffersDetails.size == 0) {
+        console.log("No new offers to settle!")
+        return
+    }
+
+    console.log("Marking all winning offers as settled...")
+
+    await new Promise<void>(async resolve => {
+        let index = 0;
+        for (let offerDetails of winningOffersDetails) {
+            const offerAdditionalDetails = offers.get(offerDetails[0])
+            const requestID = offerDetails[1]
+            const offerID = offerDetails[0]
+            debug && console.log(`Settling offer with ID ${offerID}`)
+            await SMAUGMarketplaceInstance.methods.settleTrade(requestID, offerID).send({from: offerAdditionalDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
+            if (++index == winningOffersDetails.size) {
+                resolve()
+                return
+            }
+        }
+    })
+
+    console.log("Offers marked as settled! ")
+
+    if (cleanAfterPrint) {
+        unseenOfferUnFulfilledEvents = []
+        winningOffersDetails = new Map()
     }
 }
 

@@ -223,6 +223,19 @@
         "internalType": "uint256",
         "name": "requestID",
         "type": "uint256"
+      }
+    ],
+    "name": "RequestClosed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "requestID",
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -245,6 +258,25 @@
       }
     ],
     "name": "RequestExtraAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "requestID",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "offerID",
+        "type": "uint256"
+      }
+    ],
+    "name": "TradeSettled",
     "type": "event"
   },
   {
@@ -278,6 +310,48 @@
       }
     ],
     "name": "changeOwner",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestIdentifier",
+        "type": "uint256"
+      }
+    ],
+    "name": "closeRequest",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestIdentifier",
+        "type": "uint256"
+      }
+    ],
+    "name": "deleteRequest",
     "outputs": [
       {
         "internalType": "uint8",
@@ -441,6 +515,32 @@
         "internalType": "uint256[]",
         "name": "acceptedOfferIDs",
         "type": "uint256[]"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestIdentifier",
+        "type": "uint256"
+      }
+    ],
+    "name": "getRequestDecisionTime",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "payable": false,
@@ -630,6 +730,32 @@
     "constant": false,
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "requestID",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "offerID",
+        "type": "uint256"
+      }
+    ],
+    "name": "settleTrade",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "tokenDigest",
         "type": "bytes32"
@@ -644,6 +770,32 @@
         "name": "nonce",
         "type": "bytes32"
       },
+      {
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      }
+    ],
+    "name": "submitAuthorisedRequest",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "requestID",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
       {
         "internalType": "uint256",
         "name": "deadline",
@@ -795,48 +947,6 @@
       }
     ],
     "name": "decideRequest",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "status",
-        "type": "uint8"
-      }
-    ],
-    "payable": false,
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "requestIdentifier",
-        "type": "uint256"
-      }
-    ],
-    "name": "closeRequest",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "status",
-        "type": "uint8"
-      }
-    ],
-    "payable": false,
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "requestIdentifier",
-        "type": "uint256"
-      }
-    ],
-    "name": "deleteRequest",
     "outputs": [
       {
         "internalType": "uint8",

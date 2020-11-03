@@ -20,7 +20,7 @@ Normal method names: not tested.
 
 - *getMarketInformation()*
 - *resetAccessTokens()*
-- *submitRequest() & isRequestDefined() & getRequest() & getOpenRequestIdentifiers()*
+- *submitAuthorisedRequest() & isRequestDefined() & getRequest() & getOpenRequestIdentifiers()*
 - *settleTrade()*
 
 ## SMAUGMarketPlace
