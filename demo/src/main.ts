@@ -72,7 +72,7 @@ function configureEventListener(debug: boolean = false) {
     debug && console.log("Configuring event listener...")
     SMAUGMarketplaceInstance.events
 
-    const interestingEvents = new Set(["RequestDecided", "InterledgerEventSending", "InterledgerEventAccepted", "OfferFulfilled", "OfferClaimable", "RequestClaimable"])
+    const interestingEvents = new Set(["RequestDecided", "InterledgerEventSending", "InterledgerEventAccepted", "OfferFulfilled", "OfferClaimable", "RequestClaimable", "TradeSettled"])
 
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
