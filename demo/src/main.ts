@@ -10,6 +10,7 @@ import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
+import { type } from "os"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -35,7 +36,7 @@ var backendHost: string | undefined
 var unseenEvents: EventLog[] = []
 var unseenOfferFulfilledEvents: OfferFulfilled[] = []
 var unseenOfferUnFulfilledEvents: OfferClaimable[] = []
-var winningOffersDetails: Map<string, string> = new Map()           //offerID -> requestID
+var winningOffersDetails: Map<string, string> = new Map()           // offerID -> requestID
 
 var requests: Map<string, utils.AuctionRequestCompleteDetails> = new Map()
 var offers: Map<string, utils.AuctionOfferCompleteDetails> = new Map()
@@ -64,15 +65,13 @@ async function main(): Promise<void> {
 
     await nacl.instantiate(nacl => crypto = nacl)
 
-    configureEventListener(false)
+    configureEventListener(false, new Set(["RequestDecided", "InterledgerEventSending", "InterledgerEventAccepted", "OfferFulfilled", "OfferClaimable", "RequestClaimable", "TradeSettled"]))
     await handleUserInput()
 }
 
-function configureEventListener(debug: boolean = false) {
+function configureEventListener(debug: boolean = false, eventNames: Set<String> = new Set()) {
     debug && console.log("Configuring event listener...")
     SMAUGMarketplaceInstance.events
-
-    const interestingEvents = new Set(["RequestDecided", "InterledgerEventSending", "InterledgerEventAccepted", "OfferFulfilled", "OfferClaimable", "RequestClaimable", "TradeSettled"])
 
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
         if (debug) {
@@ -95,7 +94,7 @@ function configureEventListener(debug: boolean = false) {
             const requestID = castedEvent.returnValues.requestID
             castedEvent.returnValues.winningOffersIDs.forEach(offerID => winningOffersDetails.set(offerID, requestID))
         }
-        if (interestingEvents.has(event.event)) { 
+        if (eventNames.has(event.event)) { 
             unseenEvents.push(event)
         }
     })
@@ -116,8 +115,24 @@ async function handleUserInput(): Promise<void> {
                         value: "listAccountBalances"
                     },
                     {
-                        name: `${choiceIndex++}) Trigger Interledger`,
+                        name: `${choiceIndex++}) Create test request and offers and trigger Interledger`,
                         value: "triggerInterledger"
+                    },
+                    {
+                        name: `${choiceIndex++}) Create request`,
+                        value: "createRequest"
+                    },
+                    {
+                        name: `${choiceIndex++}) Create offer`,
+                        value: "createOffer"
+                    },
+                    {
+                        name: `${choiceIndex++}) Close request`,
+                        value: "closeRequest"
+                    },
+                    {
+                        name: `${choiceIndex++}) Decide request`,
+                        value: "decideRequest"
                     },
                     {
                         name: `${choiceIndex++}) Check for new acess tokens issued`,
@@ -144,6 +159,18 @@ async function handleUserInput(): Promise<void> {
                 await getAndPrintAccountsAndBalances(web3MarketplaceInstance); break;
             case "triggerInterledger": {
                 await triggerInterledger(); break;
+            }
+            case "createRequest": {
+                await createRequest(); break;
+            }
+            case "createOffer": {
+                await createOffer(); break;
+            }
+            case "closeRequest": {
+                await closeRequest(); break;
+            }
+            case "decideRequest": {
+                await decideRequest(); break;
             }
             case "checkForOffersEvents": {
                 printNewOffersFulfilled(false)
@@ -432,4 +459,104 @@ function checkForEventsGenerated(cleanAfterPrint: Boolean = false) {
 function flipDebug() {
     debug = !debug
     console.log(`Debug switch now ${debug ? "ON" : "OFF"}!`)
+}
+
+async function getNewAccessToken(requestCreatorAccount: string) : Promise<utils.MarketplaceAccessToken> {
+    const backendEndpoint = utils.getBackendEndpoint(backendURL, requestCreatorAccount)
+    const requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
+    const requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
+
+    return await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
+}
+
+async function submitRequest(token: utils.MarketplaceAccessToken, deadline: Date, creatorAccount: string): Promise<BN> {
+    const newRequestTransactionResult = await SMAUGMarketplaceInstance.methods.submitAuthorisedRequest(token.digest, token.signature, token.nonce, deadline.getTime()/1000).send({from: creatorAccount, gas: 2000000, gasPrice: "1"})
+
+    let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Request creation failed with status ${txStatus}`)
+    }
+    const requestID = (newRequestTransactionResult.events!.RequestAdded.returnValues.requestID) as BN
+
+    debug && console.log(`Request submitted with ID: ${requestID}`)
+
+    return requestID
+}
+
+async function submitOffer(requestID: BN, creatorAccount: string): Promise<BN> {
+    const newOfferTransactionResult = await SMAUGMarketplaceInstance.methods.submitOffer(requestID.toString()).send({from: creatorAccount, gas: 2000000, gasPrice: "1"})
+
+    let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Offer creation failed with status ${txStatus}`)
+    }
+    const offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as BN
+
+    debug && console.log(`Offer submitted with ID: ${offerID}`)
+
+    return offerID
+}
+
+async function submitRequestExtra(extra: utils.RequestDetails): Promise<void> {
+    let requestExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.minAuctionPricePerMinute.toString()]
+    if (extra.instantRentRules) {
+        requestExtra.concat(utils.encodeRulesToSolidityArray(extra.instantRentRules))
+    }
+    requestExtra.push(extra.lockerID.toString())
+    
+    debug && console.log(`Submitting request extra [${requestExtra}]...`)
+
+    const newRequestExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitRequestArrayExtra(extra.id.toString(), requestExtra).send({from: extra.creatorAccount, gas: 2000000, gasPrice: "1"})
+
+    const txStatus = (newRequestExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Request extra submission failed with status ${txStatus}`)
+    }
+
+    debug && console.log(`Request extra submitted for ID: ${extra.id.toString()}`)
+}
+
+async function submitOfferExtra(extra: utils.OfferDetails): Promise<void> {
+    let offerExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.type == "auction" ? 0 : 1, "0x" + crypto.to_hex(extra.encryptionKey)]
+    if (extra.authenticationKey) {
+        offerExtra.push(crypto.to_hex(extra.authenticationKey))
+    }
+
+    debug && console.log(`Submitting offer extra [${offerExtra}]...`)
+
+    const newOfferExtraTransactionResult = await SMAUGMarketplaceInstance.methods.submitOfferArrayExtra(extra.id.toString(), offerExtra).send({from: extra.creatorAccount, gas: 2000000, gasPrice: "1", value: extra.amount.toString()})
+
+    if (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues == undefined) {
+        // All good
+        debug && console.log(`Offer extra submitted for ID: ${extra.id.toString()}`)
+    } else {
+        const txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
+        if (txStatus != 0) {
+            throw new Error(`Offer creation failed with status ${txStatus}`)
+        } else {
+            debug && console.log(`Offer extra submitted for ID: ${extra.id.toString()}`)
+        }
+    } 
+}
+
+async function closeRequest(requestID: BN, requestCreatorAccount: string): Promise<void> {
+    const requestClosingTransactionResult = await SMAUGMarketplaceInstance.methods.closeRequest(requestID.toString()).send({from: requestCreatorAccount, gas: 2000000, gasPrice: "1"})
+
+    const txStatus = (requestClosingTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Request closing failed with status ${txStatus}`)
+    }
+
+    debug && console.log(`Request ${requestID} closed successfully.`)
+}
+
+async function decideRequest(requestID: BN, winningOfferIDs: BN[], requestCreatorAccount: string): Promise<void> {
+    const requestDecisionTransactionResult = await SMAUGMarketplaceInstance.methods.decideRequest(requestID.toString(), winningOfferIDs.map(offerID => offerID.toString())).send({from: requestCreatorAccount, gas: 2000000, gasPrice: "1"})
+
+    const txStatus = (requestDecisionTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Request closing failed with status ${txStatus}`)
+    }
+
+    debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
 }

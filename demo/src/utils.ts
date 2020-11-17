@@ -5,6 +5,48 @@ import urljoin from "url-join"
 import BN from "bn.js";
 import { URL } from "url";
 
+export interface EnvVariables {
+    MPAddress: string,
+    MPABIPath: string,
+    ethereumMPAddress: string,
+    MPOwner: string,
+    MPBackendAddress: string,
+    MPBackendHost?: string
+}
+
+export interface MarketplaceAccessToken {
+    digest: string
+    encoded: string
+    signature: string
+    nonce: string
+}
+export interface RequestDetails {
+    id: BN,
+    deadline: Date,
+    startTime: Date,
+    durationInMinutes: BN,
+    minAuctionPricePerMinute: BN,
+    instantRentRules?: InstantRentRule[]
+    lockerID: BN,
+    creatorAccount: string
+}
+
+export interface InstantRentRule {
+    startDuration: BN,
+    pricePerMinute: BN
+}
+
+export interface OfferDetails {
+    id: BN,
+    startTime: Date,
+    durationInMinutes: BN,
+    type: "auction" | "instant",
+    amount: BN,
+    encryptionKey: Uint8Array,
+    authenticationKey?: Uint8Array,
+    creatorAccount: string
+}
+
 export async function waitForEnter(message?: string) {
     const waitForEnter = require("wait-for-enter");
     message = message || "Press Enter to continue..."
@@ -68,60 +110,18 @@ export function getBackendEndpoint(backendURL: URL, ethereumAddress: string): st
     return appendQuery(backendEndpoint, {ethereum_address: ethereumAddress})
 }
 
-export function getTokenDetails(tokenEncoded: string): MarketplaceAccessTokenComponents {
-    const nonceLength = 64
-    const selectorLength = 8
-    const addressLength = 40
+export function encodeRulesToSolidityArray(rules: InstantRentRule[]): string[] {
+    let result: string[] = new Array(rules.length*2)
 
-    let startIndex = 2
-    return {
-        nonce: "0x" + tokenEncoded.substr(startIndex, nonceLength),
-        methodSelector: "0x" + tokenEncoded.substr(startIndex+nonceLength, selectorLength),
-        requestCreatorAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength, addressLength),
-        contractAddress: "0x" + tokenEncoded.substr(startIndex+nonceLength+selectorLength+addressLength)
-    }
+    rules.forEach((value, index) => {
+        result[index*2] = `value.startDuration`
+        result[index*2 + 1] = `value.pricePerMinute`
+    })
+    
+    return result
 }
 
-export function getFormattedInstantRules(details: string): number[] {
-    if (details == "-1") {
-        return []
-    }
-    return details.substring(1, details.length-1).split(",").map(value => parseInt(value))
-}
-
-export interface EnvVariables {
-    MPAddress: string,
-    MPABIPath: string,
-    ethereumMPAddress: string,
-    MPOwner: string,
-    MPBackendAddress: string,
-    MPBackendHost?: string
-}
-
-export interface MarketplaceAccessToken {
-    digest: string
-    encoded: string
-    signature: string
-    nonce: string
-}
-
-export interface MarketplaceAccessTokenComponents {
-    nonce: string,
-    methodSelector: string,
-    requestCreatorAddress: string,
-    contractAddress: string
-}
-
-export interface AuctionRequestCompleteDetails {
-    deadline: Date,
-    startTime: Date,
-    durationInMinutes: BN,
-    minAuctionPricePerMinute: BN
-    lockerID: BN,
-    creatorAccount: string
-}
-
-export function requestToString(details: AuctionRequestCompleteDetails): string {
+export function requestToString(details: RequestDetails): string {
     return `
         - DEADLINE: ${details.deadline.toUTCString()}\n
         - START TIME: ${details.startTime.toUTCString()}\n
@@ -131,20 +131,13 @@ export function requestToString(details: AuctionRequestCompleteDetails): string 
     `
 }
 
-export interface AuctionOfferCompleteDetails {
-    startTime: Date,
-    durationInMinutes: BN,
-    amount: BN,
-    encryptionKey: Uint8Array,
-    decryptionKey: Uint8Array,
-    creatorAccount: string
-}
-
-export function offerToString(details: AuctionOfferCompleteDetails, encodeFunction: (input: Uint8Array) => string): string {
+export function offerToString(details: OfferDetails, keyEncodingFunction: (input: Uint8Array) => string): string {
+    const authKeyLine = details.authenticationKey ? `- AUTH KEY: ${keyEncodingFunction(details.authenticationKey)}\n` : ""
     return `
         - START TIME: ${details.startTime.toUTCString()}\n
         - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber()).toUTCString()}\n
-        - ENCRYPTION KEY: ${encodeFunction(details.encryptionKey)}\n
+        - ENCRYPTION KEY: ${keyEncodingFunction(details.encryptionKey)}\n
+        ${authKeyLine}
         - CREATOR ACCOUNT: ${details.creatorAccount}
     `
 }
