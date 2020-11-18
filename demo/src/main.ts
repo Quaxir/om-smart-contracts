@@ -12,6 +12,7 @@ import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
 import { type } from "os"
 import { isMissingDeclaration, sys } from "typescript"
+import { off } from "process"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -142,6 +143,10 @@ async function handleUserInput(): Promise<void> {
                         value: "decideRequest"
                     },
                     {
+                        name: `${choiceIndex++} Mark token as delivered`,
+                        value: "settleOffer"
+                    },
+                    {
                         name: `${choiceIndex++}) Check for new acess tokens issued`,
                         value: "checkForOffersEvents"
                     },
@@ -181,12 +186,14 @@ async function handleUserInput(): Promise<void> {
             case "decideRequest": {
                 await handleRequestDecision(); break;
             }
-            // case "checkForOffersEvents": {
-            //     printNewOffersFulfilled(false)
-            //     printNewOffersUnfulfilled(true)
-            //     await settleOffers(true)
-            //     break
-            // }
+            case "settleOffer": {
+                await handleOfferSettlment(); break;
+            }            
+            case "checkForOffersEvents": {
+                printNewOffersFulfilled(true)
+                printNewOffersUnfulfilled(true)
+                break
+            }
             // case "checkForPendingEvents": {
             //     checkForEventsGenerated(true); break;
             // }
@@ -680,81 +687,95 @@ function filterAndConvertOfferIDs(offerIDs: string[]): BN[] {
     return filterOfferIDs(offerIDs).map(element => new BN(element))
 }
 
-// function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
-//     if (unseenOfferFulfilledEvents.length > 0) {
-//         console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
-//         unseenOfferFulfilledEvents.forEach((offer, index) => {
-//             console.log(`${index+1})`)
-//             console.log(`- Offer ID: ${offer.returnValues.offerID}`)
-//             console.log(`- Encrypted token: ${offer.returnValues.token}`)
-//             let offerKeypair = keys.get(offer.returnValues.offerID)
-//             // Token decoding and decryption
-//             let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
-//             let cipherText = utils.base64ToUint8Array(tokenDecoded)
-//             let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
-//             let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
+async function handleOfferSettlment() {
+    const input = await inquirer.prompt(getOfferSettlmentQuestions())
+    const requestID = new BN(input.requestID)
+    const offerID = new BN(input.offerID)
 
-//             let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
-//             let jwtPayload = jwtDecode(decodedDecryptedToken)
-//             console.log("- Decrypted and decoded token:")
-//             console.log({header: jwtHeader, payload: jwtPayload})
+    console.log(`Settling offer...`)
+    await settleOffer(SMAUGMarketplaceInstance, requestID, offerID, currentAccount)
+    await utils.waitForEnter("Offer settled! Press Enter to continue: ")
+}
 
-//             if (index < unseenOfferFulfilledEvents.length-1) {
-//                 console.log("*****")
-//             }
-//         })
-//         if (cleanAfterPrint) {
-//             unseenOfferFulfilledEvents = []
-//         }
-//     } else {
-//         console.log("No new offers have been fulfilled!")
-//     }
-// }
+function getOfferSettlmentQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "requestID",
+            message: "Request ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        },
+        {
+            type: "input",
+            name: "offerID",
+            message: "Offer ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        },
+    ] as inquirer.QuestionCollection
+}
 
-// function printNewOffersUnfulfilled(cleanAfterPrint: Boolean = false) {
-//     if (unseenOfferUnFulfilledEvents.length > 0) {
-//         console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
-//         unseenOfferUnFulfilledEvents.forEach((offer, index) => {
-//             console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
-//         })
-//         if (cleanAfterPrint) {
-//             unseenOfferUnFulfilledEvents = []
-//         }
-//     } else {
-//         console.log("No new offers have not been fulfilled!")
-//     }
-// }
+function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
+    if (unseenOfferFulfilledEvents.length > 0) {
+        console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
+        unseenOfferFulfilledEvents.forEach((offer, index) => {
+            console.log(`${index+1})`)
+            console.log(`- Offer ID: ${offer.returnValues.offerID}`)
+            console.log(`- Encrypted token: ${offer.returnValues.token}`)
+            let offerKeypair = keys.get(offer.returnValues.offerID)
+            // Token decoding and decryption
+            let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
+            let cipherText = utils.base64ToUint8Array(tokenDecoded)
+            let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
+            let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
 
-// async function settleOffers(cleanAfterPrint: Boolean = false) {
-//     if (winningOffersDetails.size == 0) {
-//         console.log("No new offers to settle!")
-//         return
-//     }
+            let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
+            let jwtPayload = jwtDecode(decodedDecryptedToken)
+            console.log("- Decrypted and decoded token:")
+            console.log({header: jwtHeader, payload: jwtPayload})
 
-//     console.log("Marking all winning offers as settled...")
+            if (index < unseenOfferFulfilledEvents.length-1) {
+                console.log("*****")
+            }
+        })
+        if (cleanAfterPrint) {
+            unseenOfferFulfilledEvents = []
+        }
+    } else {
+        console.log("No new offers have been fulfilled!")
+    }
+}
 
-//     await new Promise<void>(async resolve => {
-//         let index = 0;
-//         for (let offerDetails of winningOffersDetails) {
-//             const offerAdditionalDetails = offers.get(offerDetails[0])
-//             const requestID = offerDetails[1]
-//             const offerID = offerDetails[0]
-//             debug && console.log(`Settling offer with ID ${offerID}`)
-//             await SMAUGMarketplaceInstance.methods.settleTrade(requestID, offerID).send({from: offerAdditionalDetails.creatorAccount, gas: 2000000, gasPrice: "1"})
-//             if (++index == winningOffersDetails.size) {
-//                 resolve()
-//                 return
-//             }
-//         }
-//     })
-
-//     console.log("Offers marked as settled! ")
-
-//     if (cleanAfterPrint) {
-//         unseenOfferUnFulfilledEvents = []
-//         winningOffersDetails = new Map()
-//     }
-// }
+function printNewOffersUnfulfilled(cleanAfterPrint: Boolean = false) {
+    if (unseenOfferUnFulfilledEvents.length > 0) {
+        console.log(`!!! ${unseenOfferUnFulfilledEvents.length} new offers have not been fulfilled since last time!`)
+        unseenOfferUnFulfilledEvents.forEach((offer, index) => {
+            console.log(`${index+1}) Offer ID: ${offer.returnValues.offerID}`)
+        })
+        if (cleanAfterPrint) {
+            unseenOfferUnFulfilledEvents = []
+        }
+    } else {
+        console.log("No new offers have not been fulfilled!")
+    }
+}
 
 // function checkForEventsGenerated(cleanAfterPrint: Boolean = false) {
 //     if (unseenEvents.length == 0) {
@@ -843,4 +864,15 @@ async function decideRequest(marketplace: SMAUGMarketplace, requestID: BN, winni
     }
 
     debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
+}
+
+async function settleOffer(marketplace: SMAUGMarketplace, requestID: BN, offerID: BN, transactionCreatorAccount: string): Promise<void> {
+    const offerSettlmentTransactionResult = await marketplace.methods.settleTrade(requestID.toString(), offerID.toString()).send({from: transactionCreatorAccount, gas: 2000000, gasPrice: "1"})
+    
+    if (offerSettlmentTransactionResult.events!.FunctionStatus) {
+        const txStatus = offerSettlmentTransactionResult.events!.FunctionStatus.returnValues.status as number
+        throw new Error(`Offer settlment failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
+    }
+
+    debug && console.log(`Offer ${offerID} settled for request ${requestID}.`)
 }
