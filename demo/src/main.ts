@@ -10,9 +10,6 @@ import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
-import { type } from "os"
-import { isMissingDeclaration, sys } from "typescript"
-import { off } from "process"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -38,10 +35,6 @@ var backendHost: string | undefined
 var unseenEvents: EventLog[] = []
 var unseenOfferFulfilledEvents: OfferFulfilled[] = []
 var unseenOfferUnFulfilledEvents: OfferClaimable[] = []
-var winningOffersDetails: Map<string, string> = new Map()           // offerID -> requestID
-
-var requests: Map<string, utils.RequestDetails> = new Map()
-var offers: Map<string, utils.OfferDetails> = new Map()
 
 var keys: Map<string, [Uint8Array, Uint8Array]> = new Map()     // offerID -> (secret key, public key)
 
@@ -87,16 +80,11 @@ function configureEventListener(debug: boolean = false, eventNames: Set<String> 
             }
         }
         if (event.event == "OfferFulfilled") {
-            let castedEvent = event as OfferFulfilled
+            const castedEvent = event as OfferFulfilled
             unseenOfferFulfilledEvents.push(castedEvent)
         } else if (event.event == "OfferClaimable") {
-            let castedEvent = event as OfferClaimable
+            const castedEvent = event as OfferClaimable
             unseenOfferUnFulfilledEvents.push(castedEvent)
-        } else if (event.event == "RequestDecided") {
-            // To improve: update map of winningOfferID -> requestID for future trade settlment
-            let castedEvent = event as RequestDecided
-            const requestID = castedEvent.returnValues.requestID
-            castedEvent.returnValues.winningOffersIDs.forEach(offerID => winningOffersDetails.set(offerID, requestID))
         }
         if (eventNames.has(event.event)) { 
             unseenEvents.push(event)
@@ -109,7 +97,7 @@ function configureEventListener(debug: boolean = false, eventNames: Set<String> 
 async function handleUserInput(): Promise<void> {
     while (true) {
         var choiceIndex = 1
-        let answers = await inquirer.prompt([
+        const answers = await inquirer.prompt([
             {
                 type: "list",
                 name: "choice", message: "What would you like to do?",
@@ -145,6 +133,14 @@ async function handleUserInput(): Promise<void> {
                     {
                         name: `${choiceIndex++} Mark token as delivered`,
                         value: "settleOffer"
+                    },
+                    {
+                        name: `${choiceIndex++} Claim money for offer fulfilled`,
+                        value: "offerFulfilledClaim"
+                    },
+                    {
+                        name: `${choiceIndex++} Claim money for offer not fulfilled`,
+                        value: "offerUnfulfilledClaim"
                     },
                     {
                         name: `${choiceIndex++}) Check for new acess tokens issued`,
@@ -188,18 +184,24 @@ async function handleUserInput(): Promise<void> {
             }
             case "settleOffer": {
                 await handleOfferSettlment(); break;
-            }            
+            }
+            case "offerFulfilledClaim": {
+                await handleRequestCreatorClaim(); break;
+            }
+            case "offerUnfulfilledClaim": {
+                await handleOfferCreatorClaim(); break;
+            }
             case "checkForOffersEvents": {
                 printNewOffersFulfilled(true)
                 printNewOffersUnfulfilled(true)
                 break
             }
-            // case "checkForPendingEvents": {
-            //     checkForEventsGenerated(true); break;
-            // }
-            // case "flipDebug": {
-            //     flipDebug(); break;
-            // }
+            case "checkForPendingEvents": {
+                checkForEventsGenerated(true); break;
+            }
+            case "flipDebug": {
+                flipDebug(); break;
+            }
             case "exit": { return }
         }
     }
@@ -207,14 +209,14 @@ async function handleUserInput(): Promise<void> {
 
 // Returns a list of tuples where each tuple is [acount: string, balance: BN]
 async function getAccountsAndBalances(web3Instance: Web3, shouldPrint: boolean=true): Promise<[string, BN][]> {
-    let accounts = await web3MarketplaceInstance.eth.getAccounts()
-    let balances = await Promise.all(accounts.map(async (account) => {
-        let balance = await web3MarketplaceInstance.eth.getBalance(account)
+    const accounts = await web3MarketplaceInstance.eth.getAccounts()
+    const balances = await Promise.all(accounts.map(async (account) => {
+        const balance = await web3MarketplaceInstance.eth.getBalance(account)
         return web3Instance.utils.toBN(balance)
     }))
 
     if (shouldPrint) {
-        let output = accounts.map((account, index) => {
+        const output = accounts.map((account, index) => {
             return `${account} - ${balances[index].toString()} wei`
         })
         console.log(output)
@@ -224,10 +226,10 @@ async function getAccountsAndBalances(web3Instance: Web3, shouldPrint: boolean=t
 }
 
 async function changeAccount(): Promise<void> {
-    let accounts = await getAccountsAndBalances(web3MarketplaceInstance, false)
-    let answer = await inquirer.prompt(getChangeAccountQuestions(accounts))
+    const accounts = await getAccountsAndBalances(web3MarketplaceInstance, false)
+    const answer = await inquirer.prompt(getChangeAccountQuestions(accounts))
     currentAccount = answer.account[0]
-    console.log(`Account changed to ${currentAccount}`)
+    debug && console.log(`Account changed to ${currentAccount}`)
 }
 
 function getChangeAccountQuestions(accounts: [string, BN][]): inquirer.QuestionCollection {
@@ -245,7 +247,7 @@ function getChangeAccountQuestions(accounts: [string, BN][]): inquirer.QuestionC
 
 async function triggerInterledger(): Promise<void> {
 
-    let availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
+    const availableAccounts = await web3MarketplaceInstance.eth.getAccounts()
     const testRequestCreatorAccount = availableAccounts[0]
     const testRequestDetails = await createTestRequest(SMAUGMarketplaceInstance, testRequestCreatorAccount)
     const testOffer1CreatorAccount = availableAccounts[6]
@@ -287,8 +289,6 @@ async function createTestRequest(marketplace: SMAUGMarketplace, creatorAccount: 
 
     await submitRequestExtra(marketplace, requestDetails)
 
-    requests.set(requestID.toString(), requestDetails)
-
     return requestDetails
 }
 
@@ -307,7 +307,6 @@ async function createTestOffer1(marketplace: SMAUGMarketplace, requestDetails: u
     await submitOfferExtra(marketplace, offerDetails)
 
     keys.set(offerID.toString(), [decryptionKey, encryptionKey])
-    offers.set(offerID.toString(), offerDetails)
 
     return offerDetails
 }
@@ -327,7 +326,6 @@ async function createTestOffer2(marketplace: SMAUGMarketplace, requestDetails: u
     await submitOfferExtra(marketplace, offerDetails)
 
     keys.set(offerID.toString(), [decryptionKey, encryptionKey])
-    offers.set(offerID.toString(), offerDetails)
 
     return offerDetails
 }
@@ -347,17 +345,13 @@ async function createTestOffer3(marketplace: SMAUGMarketplace, requestDetails: u
     await submitOfferExtra(marketplace, offerDetails)
 
     keys.set(offerID.toString(), [decryptionKey, encryptionKey])
-    offers.set(offerID.toString(), offerDetails)
 
     return offerDetails
 }
 
-
-var lastRequestID: BN
-
 async function handleAuctionRequestCreation(): Promise<void> {
-    // const input = await inquirer.prompt(getRequestCreationQuestions())
-    const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
+    const input = await inquirer.prompt(getRequestCreationQuestions())
+    // const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
 
     console.log(`Requesting new access token from marketplace backend...`)
     const accessToken = await getNewAccessToken(currentAccount)
@@ -382,9 +376,6 @@ async function handleAuctionRequestCreation(): Promise<void> {
     console.log("Request extra added!")
     console.log(utils.requestToString(requestDetails))
 
-    requests.set(requestID.toString(), requestDetails)
-    lastRequestID = requestID
-
     await utils.waitForEnter("Request creation process completed! Press Enter to continue: ")
 }
 
@@ -395,11 +386,11 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             name: "requestDeadline",
             message: "Request deadline (in UTC format)",
             validate: (input) => {
-                let datetime = new Date(input).getTime()
+                const datetime = new Date(input).getTime()
                 if (isNaN(datetime)) {
                     return "Not a valid date."
                 }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                const secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
                 if (secondsSinceEpoch < new Date().getTime() / 1000) {
                     return "Deadline must not be already past."
                 }
@@ -411,11 +402,11 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             name: "requestStartingTime",
             message: "Request starting time (in UTC format)",
             validate: (input) => {
-                let datetime = new Date(input).getTime()
+                const datetime = new Date(input).getTime()
                 if (isNaN(datetime)) {
                     return "Not a valid date."
                 }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                const secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
                 if (secondsSinceEpoch < new Date().getTime() / 1000) {
                     return "Starting time must not be already past."
                 }
@@ -427,11 +418,11 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
             name: "requestEndTime",
             message: "Request end time (in UCT format)",
             validate: (input) => {
-                let datetime = new Date(input).getTime()
+                const datetime = new Date(input).getTime()
                 if (isNaN(datetime)) {
                     return "Not a valid date."
                 }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                const secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
                 if (secondsSinceEpoch < new Date().getTime() / 1000) {
                     return "End time must not be already past."
                 }
@@ -486,7 +477,7 @@ async function submitRequest(marketplace: SMAUGMarketplace, token: utils.Marketp
 }
 
 async function submitRequestExtra(marketplace: SMAUGMarketplace, extra: utils.RequestDetails): Promise<void> {
-    let requestExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.minAuctionPricePerMinute.toString()]
+    const requestExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.minAuctionPricePerMinute.toString()]
     if (extra.instantRentRules) {
         requestExtra.concat(utils.encodeRulesToSolidityArray(extra.instantRentRules))
     }
@@ -505,8 +496,8 @@ async function submitRequestExtra(marketplace: SMAUGMarketplace, extra: utils.Re
 }
 
 async function handleOfferCreation(): Promise<void> {
-    // const input = await inquirer.prompt(getOfferCreationQuestions())
-    const input = { requestID: lastRequestID.toString(), offerStartingTime: "2021-05-24T00:00:00Z", offerEndTime: "2021-05-24T23:59:59Z", totalPrice: "2000" }
+    const input = await inquirer.prompt(getOfferCreationQuestions())
+    // const input = { requestID: lastRequestID.toString(), offerStartingTime: "2021-05-24T00:00:00Z", offerEndTime: "2021-05-24T23:59:59Z", totalPrice: "2000" }
     
     // Create offer
     const requestID = new BN(input.requestID)
@@ -527,7 +518,6 @@ async function handleOfferCreation(): Promise<void> {
     console.log("Offer extra added!")
     console.log(utils.offerToString(offerDetails, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
 
-    offers.set(offerID.toString(), offerDetails)
     keys.set(offerID.toString(), [decryptionKey, encryptionKey])
 
     await utils.waitForEnter("Offer creation process completed! Press Enter to continue: ")
@@ -555,11 +545,11 @@ function getOfferCreationQuestions(): inquirer.QuestionCollection {
             name: "offerStartingTime",
             message: "Offer starting time (in UTC format)",
             validate: (input) => {
-                let datetime = new Date(input).getTime()
+                const datetime = new Date(input).getTime()
                 if (isNaN(datetime)) {
                     return "Not a valid date."
                 }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                const secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
                 if (secondsSinceEpoch < new Date().getTime() / 1000) {
                     return "Starting time must not be already past."
                 }
@@ -571,11 +561,11 @@ function getOfferCreationQuestions(): inquirer.QuestionCollection {
             name: "offerEndTime",
             message: "Offer end time (in UCT format)",
             validate: (input) => {
-                let datetime = new Date(input).getTime()
+                const datetime = new Date(input).getTime()
                 if (isNaN(datetime)) {
                     return "Not a valid date."
                 }
-                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                const secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
                 if (secondsSinceEpoch < new Date().getTime() / 1000) {
                     return "End time must not be already past."
                 }
@@ -732,6 +722,64 @@ function getOfferSettlmentQuestions(): inquirer.QuestionCollection {
     ] as inquirer.QuestionCollection
 }
 
+async function handleRequestCreatorClaim(): Promise<void> {
+    const input = await inquirer.prompt(getRequestCreatorClaimQuestions())
+    const offerID = new BN(input.offerID)
+
+    console.log(`Claming money...`)
+    await claimMoney(SMAUGMarketplaceInstance, offerID, currentAccount)
+    await utils.waitForEnter("Money claimed! Press Enter to continue: ")
+}
+
+function getRequestCreatorClaimQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "offerID",
+            message: "Offer ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        }
+    ] as inquirer.QuestionCollection
+}
+
+async function handleOfferCreatorClaim(): Promise<void> {
+    const input = await inquirer.prompt(getOfferCreatorClaimQuestions())
+    const offerID = new BN(input.offerID)
+
+    console.log(`Claming money...`)
+    await claimMoney(SMAUGMarketplaceInstance, offerID, currentAccount)
+    await utils.waitForEnter("Money claimed! Press Enter to continue: ")
+}
+
+function getOfferCreatorClaimQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "offerID",
+            message: "Offer ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        }
+    ] as inquirer.QuestionCollection
+}
+
 function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
     if (unseenOfferFulfilledEvents.length > 0) {
         console.log(`!!! ${unseenOfferFulfilledEvents.length} new offers have been fulfilled since last time!`)
@@ -739,15 +787,15 @@ function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
             console.log(`${index+1})`)
             console.log(`- Offer ID: ${offer.returnValues.offerID}`)
             console.log(`- Encrypted token: ${offer.returnValues.token}`)
-            let offerKeypair = keys.get(offer.returnValues.offerID)
+            const offerKeypair = keys.get(offer.returnValues.offerID)
             // Token decoding and decryption
-            let tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
-            let cipherText = utils.base64ToUint8Array(tokenDecoded)
-            let decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
-            let decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
+            const tokenDecoded = web3MarketplaceInstance.utils.toUtf8(offer.returnValues.token)
+            const cipherText = utils.base64ToUint8Array(tokenDecoded)
+            const decryptedToken = crypto.crypto_box_seal_open(cipherText, offerKeypair[1], offerKeypair[0])
+            const decodedDecryptedToken = crypto.decode_utf8(decryptedToken)
 
-            let jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
-            let jwtPayload = jwtDecode(decodedDecryptedToken)
+            const jwtHeader = jwtDecode(decodedDecryptedToken, {header: true})
+            const jwtPayload = jwtDecode(decodedDecryptedToken)
             console.log("- Decrypted and decoded token:")
             console.log({header: jwtHeader, payload: jwtPayload})
 
@@ -777,27 +825,27 @@ function printNewOffersUnfulfilled(cleanAfterPrint: Boolean = false) {
     }
 }
 
-// function checkForEventsGenerated(cleanAfterPrint: Boolean = false) {
-//     if (unseenEvents.length == 0) {
-//         console.log("No pending events.")
-//         return
-//     }
+function checkForEventsGenerated(cleanAfterPrint: Boolean = false) {
+    if (unseenEvents.length == 0) {
+        console.log("No pending events.")
+        return
+    }
 
-//     console.log("Events emitted:")
+    console.log("Events emitted:")
 
-//     unseenEvents.forEach((event, index) => {
-//         console.log(event)
-//     })
+    unseenEvents.forEach((event) => {
+        console.log(event)
+    })
 
-//     if (cleanAfterPrint) {
-//         unseenEvents = []
-//     }
-// }
+    if (cleanAfterPrint) {
+        unseenEvents = []
+    }
+}
 
-// function flipDebug() {
-//     debug = !debug
-//     console.log(`Debug switch now ${debug ? "ON" : "OFF"}!`)
-// }
+function flipDebug() {
+    debug = !debug
+    console.log(`Debug switch now ${debug ? "ON" : "OFF"}!`)
+}
 
 async function getNewAccessToken(requestCreatorAccount: string) : Promise<utils.MarketplaceAccessToken> {
     const backendEndpoint = utils.getBackendEndpoint(backendURL, requestCreatorAccount)
@@ -810,7 +858,7 @@ async function getNewAccessToken(requestCreatorAccount: string) : Promise<utils.
 async function submitOffer(marketplace: SMAUGMarketplace, requestID: BN, creatorAccount: string): Promise<BN> {
     const newOfferTransactionResult = await marketplace.methods.submitOffer(requestID.toString()).send({from: creatorAccount, gas: 2000000, gasPrice: "1"})
 
-    let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    const txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         throw new Error(`Offer creation failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
     }
@@ -822,7 +870,7 @@ async function submitOffer(marketplace: SMAUGMarketplace, requestID: BN, creator
 }
 
 async function submitOfferExtra(marketplace: SMAUGMarketplace, extra: utils.OfferDetails): Promise<void> {
-    let offerExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.type == "auction" ? 0 : 1, "0x" + crypto.to_hex(extra.encryptionKey)]
+    const offerExtra = [extra.startTime.getTime()/1000, extra.durationInMinutes.toString(), extra.type == "auction" ? 0 : 1, "0x" + crypto.to_hex(extra.encryptionKey)]
     if (extra.authenticationKey) {
         offerExtra.push(crypto.to_hex(extra.authenticationKey))
     }
@@ -875,4 +923,15 @@ async function settleOffer(marketplace: SMAUGMarketplace, requestID: BN, offerID
     }
 
     debug && console.log(`Offer ${offerID} settled for request ${requestID}.`)
+}
+
+async function claimMoney(marketplace: SMAUGMarketplace, offerID: BN, requestorAccount: string): Promise<void> {
+    const moneyClaimTransactionResult = await marketplace.methods.withdraw(offerID.toString()).send({from: requestorAccount, gas: 2000000, gasPrice: "1"})
+
+    const txStatus = (moneyClaimTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    if (txStatus != 0) {
+        throw new Error(`Money claim failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
+    }
+
+    debug && console.log(`Money correctly claimed for offer ${offerID}!`)
 }
