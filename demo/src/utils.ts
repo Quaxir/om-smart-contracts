@@ -49,7 +49,7 @@ export interface OfferDetails {
 
 export async function waitForEnter(message?: string) {
     const waitForEnter = require("wait-for-enter");
-    message = message || "Press Enter to continue..."
+    message = message || "Press Enter to continue: "
     console.log(message)
     await waitForEnter()
 }
@@ -123,6 +123,7 @@ export function encodeRulesToSolidityArray(rules: InstantRentRule[]): string[] {
 
 export function requestToString(details: RequestDetails): string {
     return `
+        - ID: ${details.id}\n
         - DEADLINE: ${details.deadline.toUTCString()}\n
         - START TIME: ${details.startTime.toUTCString()}\n
         - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber()).toUTCString()}\n
@@ -134,10 +135,15 @@ export function requestToString(details: RequestDetails): string {
 export function offerToString(details: OfferDetails, keyEncodingFunction: (input: Uint8Array) => string): string {
     const authKeyLine = details.authenticationKey ? `- AUTH KEY: ${keyEncodingFunction(details.authenticationKey)}\n` : ""
     return `
+        - ID: ${details.id}\n
         - START TIME: ${details.startTime.toUTCString()}\n
         - END TIME: ${new Date(new BN(details.startTime.getTime()).add(details.durationInMinutes.mul(new BN(60000))).toNumber()).toUTCString()}\n
         - ENCRYPTION KEY: ${keyEncodingFunction(details.encryptionKey)}\n
         ${authKeyLine}
         - CREATOR ACCOUNT: ${details.creatorAccount}
     `
+}
+
+export function distanceInMinutes(startDate: Date, endDate: Date): number {
+    return Math.ceil((endDate.getTime() - startDate.getTime()) / 60000)
 }

@@ -11,6 +11,7 @@ import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode";
 import { type } from "os"
+import { isMissingDeclaration, sys } from "typescript"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -169,17 +170,17 @@ async function handleUserInput(): Promise<void> {
                 await triggerInterledger(); break;
             }
             case "createAuctionRequest": {
-                await createAuctionRequest(); break;
+                await handleAuctionRequestCreation(); break;
             }
-            // case "createOffer": {
-            //     await createOffer(); break;
-            // }
-            // case "closeRequest": {
-            //     await closeRequest(); break;
-            // }
-            // case "decideRequest": {
-            //     await decideRequest(); break;
-            // }
+            case "createOffer": {
+                await handleOfferCreation(); break;
+            }
+            case "closeRequest": {
+                await handleRequestClosing(); break;
+            }
+            case "decideRequest": {
+                await handleRequestDecision(); break;
+            }
             // case "checkForOffersEvents": {
             //     printNewOffersFulfilled(false)
             //     printNewOffersUnfulfilled(true)
@@ -344,40 +345,42 @@ async function createTestOffer3(marketplace: SMAUGMarketplace, requestDetails: u
     return offerDetails
 }
 
-async function createAuctionRequest(): Promise<void> {
-    // const requestInput = await inquirer.prompt(getRequestCreationQuestions())
-    const requestInput = {requestDeadline: "2020-11-28T22:00:00Z", requestStartingTime: "2020-11-28T22:01:00Z", requestEndTime: "2020-11-28T22:02:00Z", minAuctionPrice: "1", lockerID: "123"}
+
+var lastRequestID: BN
+
+async function handleAuctionRequestCreation(): Promise<void> {
+    // const input = await inquirer.prompt(getRequestCreationQuestions())
+    const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
 
     console.log(`Requesting new access token from marketplace backend...`)
     const accessToken = await getNewAccessToken(currentAccount)
-
-    console.log("Request token obtained from backend:")
     console.log(accessToken)
 
     await utils.waitForEnter()
     
     // Create request
-    const deadline = new Date(requestInput.requestDeadline)
+    const deadline = new Date(input.requestDeadline)
     const deadlineInSeconds = deadline.getTime() / 1000
     console.log(`Creating request with deadline: ${deadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
     const requestID = await submitRequest(SMAUGMarketplaceInstance, accessToken, deadline, currentAccount)
 
-    await utils.waitForEnter()
+    await utils.waitForEnter(`Request created with ID ${requestID}. Press Enter to submit the request extra: `)
 
     // Create request extra
-    const startDate = new Date(requestInput.requestStartingTime)
-    const endDate = new Date(requestInput.requestEndTime)
-    const durationInMinutes = new BN(Math.ceil((endDate.getTime() - startDate.getTime()) / 60000))
-    const requestDetails: utils.RequestDetails = { id: requestID, deadline: deadline, startTime: startDate, durationInMinutes: durationInMinutes, minAuctionPricePerMinute: new BN(requestInput.minAuctionPrice), lockerID: new BN(requestInput.lockerID), creatorAccount: currentAccount }
-    console.log(`Submitting request details...`)
+    const startDate = new Date(input.requestStartingTime)
+    const endDate = new Date(input.requestEndTime)
+    const durationInMinutes = new BN(utils.distanceInMinutes(startDate, endDate))
+    const requestDetails: utils.RequestDetails = { id: requestID, deadline: deadline, startTime: startDate, durationInMinutes: durationInMinutes, minAuctionPricePerMinute: new BN(input.minAuctionPrice), lockerID: new BN(input.lockerID), creatorAccount: currentAccount }
+    await submitRequestExtra(SMAUGMarketplaceInstance, requestDetails)
+    console.log("Request extra added!")
     console.log(utils.requestToString(requestDetails))
 
     requests.set(requestID.toString(), requestDetails)
+    lastRequestID = requestID
 
-    await utils.waitForEnter("Request creation complete! Press Enter to continue: ")
+    await utils.waitForEnter("Request creation process completed! Press Enter to continue: ")
 }
 
-// Expected answers from these questions are {requestDeadline: datetime, requestStartingTime: datetime, requestDuration: string, minAuctionPrice: string, lockerID: string, creatorAccount: string}
 function getRequestCreationQuestions(): inquirer.QuestionCollection {
     return [
         {
@@ -464,7 +467,7 @@ function getRequestCreationQuestions(): inquirer.QuestionCollection {
 async function submitRequest(marketplace: SMAUGMarketplace, token: utils.MarketplaceAccessToken, deadline: Date, creatorAccount: string): Promise<BN> {
     const newRequestTransactionResult = await marketplace.methods.submitAuthorisedRequest(token.digest, token.signature, token.nonce, deadline.getTime()/1000).send({from: creatorAccount, gas: 2000000, gasPrice: "1"})
 
-    let txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
+    const txStatus = (newRequestTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
         throw new Error(`Request creation failed with status ${txStatus}`)
     }
@@ -492,6 +495,189 @@ async function submitRequestExtra(marketplace: SMAUGMarketplace, extra: utils.Re
     }
 
     debug && console.log(`Request extra submitted for ID: ${extra.id.toString()}`)
+}
+
+async function handleOfferCreation(): Promise<void> {
+    // const input = await inquirer.prompt(getOfferCreationQuestions())
+    const input = { requestID: lastRequestID.toString(), offerStartingTime: "2021-05-24T00:00:00Z", offerEndTime: "2021-05-24T23:59:59Z", totalPrice: "2000" }
+    
+    // Create offer
+    const requestID = new BN(input.requestID)
+    console.log(`Creating offer for request ${requestID}...`)
+    const offerID = await submitOffer(SMAUGMarketplaceInstance, requestID, currentAccount)
+    await utils.waitForEnter(`Offer created with ID ${offerID}. Press Enter to submit offer extra: `)
+
+    // Create offer extra
+    const startDate = new Date(input.offerStartingTime)
+    const endDate = new Date(input.offerEndTime)
+    const durationInMinutes = new BN(utils.distanceInMinutes(startDate, endDate))
+    const totalPrice = new BN(input.totalPrice)
+    const newKeyPair = crypto.crypto_box_seed_keypair([1])
+    const encryptionKey = newKeyPair.boxPk
+    const decryptionKey = newKeyPair.boxSk
+    const offerDetails: utils.OfferDetails = { id: offerID, startTime: startDate, durationInMinutes: durationInMinutes, type: "auction", amount: new BN(totalPrice), encryptionKey: encryptionKey, creatorAccount: currentAccount }
+    await submitOfferExtra(SMAUGMarketplaceInstance, offerDetails)
+    console.log("Offer extra added!")
+    console.log(utils.offerToString(offerDetails, (encryptionKey) => "0x" + crypto.to_hex(encryptionKey)))
+
+    offers.set(offerID.toString(), offerDetails)
+    keys.set(offerID.toString(), [decryptionKey, encryptionKey])
+
+    await utils.waitForEnter("Offer creation process completed! Press Enter to continue: ")
+}
+
+function getOfferCreationQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "requestID",
+            message: "Request ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        },
+        {
+            type: "input",
+            name: "offerStartingTime",
+            message: "Offer starting time (in UTC format)",
+            validate: (input) => {
+                let datetime = new Date(input).getTime()
+                if (isNaN(datetime)) {
+                    return "Not a valid date."
+                }
+                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                    return "Starting time must not be already past."
+                }
+                return true
+            }
+        },
+        {
+            type: "input",
+            name: "offerEndTime",
+            message: "Offer end time (in UCT format)",
+            validate: (input) => {
+                let datetime = new Date(input).getTime()
+                if (isNaN(datetime)) {
+                    return "Not a valid date."
+                }
+                let secondsSinceEpoch = datetime / 1000                 // Operations are in seconds, not milliseconds
+                if (secondsSinceEpoch < new Date().getTime() / 1000) {
+                    return "End time must not be already past."
+                }
+                return true
+            }            
+        },
+        {
+            type: "input",
+            name: "totalPrice",
+            message: "Price to pay",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }            
+        }
+    ] as inquirer.QuestionCollection
+}
+
+async function handleRequestClosing(): Promise<void> {
+    const input = await inquirer.prompt(getRequestClosingQuestions())
+    const requestID = new BN(input.requestID)
+
+    console.log(`Closing request...`)
+    await closeRequest(SMAUGMarketplaceInstance, requestID, currentAccount)
+
+    await utils.waitForEnter("Request closed! Press Enter to continue: ")
+}
+
+function getRequestClosingQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "requestID",
+            message: "Request ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        },
+    ] as inquirer.QuestionCollection
+}
+
+async function handleRequestDecision(): Promise<void> {
+    const input = await inquirer.prompt(getRequestDecisionQuestions())
+    const requestID = new BN(input.requestID)
+    const offerIDs = filterAndConvertOfferIDs(input.offerIDs)
+
+    console.log(`Deciding request...`)
+    await decideRequest(SMAUGMarketplaceInstance, requestID, offerIDs, currentAccount)
+    await utils.waitForEnter("Request decided! Press Enter to continue: ")
+}
+
+function getRequestDecisionQuestions(): inquirer.QuestionCollection {
+    return [
+        {
+            type: "input",
+            name: "requestID",
+            message: "Request ID",
+            validate: (input) => {
+                try {
+                    if (Web3.utils.toBN(input) > Web3.utils.toBN(0)) {
+                        return true
+                    }
+                    return "Value must be > 0."
+                } catch {
+                    return "Value is not a number."
+                }
+            }
+        },
+        {
+            type: "input",
+            name: "offerIDs",
+            message: "IDs of the offers, separated by a comma.",
+            validate: (input: string) => {
+                const cleanedInput = input.split(",").map(element => element.trim()).filter(element => element.length > 0)        // Split by comma, remove leading and trailing whitespaces, remove resulting empty strings
+                if (cleanedInput.length == 0) {
+                    return "Not a valid input."
+                }
+                
+                const validatedInput = filterOfferIDs(cleanedInput)
+                if (validatedInput.length < cleanedInput.length) {
+                    return "Some values are not numbers."
+                }
+
+                return true
+            },
+
+        }
+    ] as inquirer.QuestionCollection
+}
+
+function filterOfferIDs(offerIDs: string[]): string[] {
+    return offerIDs.filter(element => !isNaN(+element))
+}
+
+function filterAndConvertOfferIDs(offerIDs: string[]): BN[] {
+    return filterOfferIDs(offerIDs).map(element => new BN(element))
 }
 
 // function printNewOffersFulfilled(cleanAfterPrint: Boolean = false) {
@@ -605,7 +791,7 @@ async function submitOffer(marketplace: SMAUGMarketplace, requestID: BN, creator
 
     let txStatus = (newOfferTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        throw new Error(`Offer creation failed with status ${txStatus}`)
+        throw new Error(`Offer creation failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
     }
     const offerID = (newOfferTransactionResult.events!.OfferAdded.returnValues.offerID) as BN
 
@@ -630,7 +816,7 @@ async function submitOfferExtra(marketplace: SMAUGMarketplace, extra: utils.Offe
     } else {
         const txStatus = (newOfferExtraTransactionResult.events!.FunctionStatus.returnValues.status) as number
         if (txStatus != 0) {
-            throw new Error(`Offer creation failed with status ${txStatus}`)
+            throw new Error(`Offer creation failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
         } else {
             debug && console.log(`Offer extra submitted for ID: ${extra.id.toString()}`)
         }
@@ -640,9 +826,9 @@ async function submitOfferExtra(marketplace: SMAUGMarketplace, extra: utils.Offe
 async function closeRequest(marketplace: SMAUGMarketplace, requestID: BN, requestCreatorAccount: string): Promise<void> {
     const requestClosingTransactionResult = await marketplace.methods.closeRequest(requestID.toString()).send({from: requestCreatorAccount, gas: 2000000, gasPrice: "1"})
 
-    const txStatus = (requestClosingTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
+    const txStatus = (requestClosingTransactionResult.events!.FunctionStatus.returnValues.status) as number
     if (txStatus != 0) {
-        throw new Error(`Request closing failed with status ${txStatus}`)
+        throw new Error(`Request closing failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
     }
 
     debug && console.log(`Request ${requestID} closed successfully.`)
@@ -653,7 +839,7 @@ async function decideRequest(marketplace: SMAUGMarketplace, requestID: BN, winni
 
     const txStatus = (requestDecisionTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
     if (txStatus != 0) {
-        throw new Error(`Request closing failed with status ${txStatus}`)
+        throw new Error(`Request closing failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
     }
 
     debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
