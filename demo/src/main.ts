@@ -103,11 +103,11 @@ async function handleUserInput(): Promise<void> {
                 name: "choice", message: "What would you like to do?",
                 choices: [
                     {
-                        name: `${choiceIndex++}) List accounts and balances`,
+                        name: `${choiceIndex++}) List available Ethereum accounts and balances`,
                         value: "listAccountBalances"
                     },
                     {
-                        name: `${choiceIndex++}) Change Ethereum account`,
+                        name: `${choiceIndex++}) Change Ethereum account - Change Ethereum active account to perform marketplace operations`,
                         value: "changeAccount"
                     },
                     {
@@ -115,35 +115,35 @@ async function handleUserInput(): Promise<void> {
                         value: "triggerInterledger"
                     },
                     {
-                        name: `${choiceIndex++}) Create an auction request`,
+                        name: `${choiceIndex++}) Create a new auction request`,
                         value: "createAuctionRequest"
                     },
                     {
-                        name: `${choiceIndex++}) Create offer`,
+                        name: `${choiceIndex++}) Create a new offer`,
                         value: "createOffer"
                     },
                     {
-                        name: `${choiceIndex++}) Close request`,
+                        name: `${choiceIndex++}) Close an existing request`,
                         value: "closeRequest"
                     },
                     {
-                        name: `${choiceIndex++}) Decide request`,
+                        name: `${choiceIndex++}) Decide an existing request`,
                         value: "decideRequest"
                     },
                     {
-                        name: `${choiceIndex++} Mark token as delivered`,
+                        name: `${choiceIndex++} Mark token as delivered for a winning offer`,
                         value: "settleOffer"
                     },
                     {
-                        name: `${choiceIndex++} Claim money for offer fulfilled`,
+                        name: `${choiceIndex++} Claim money for offer fulfilled - The creator of a completed request can claim money for an offer that has been succesfully served`,
                         value: "offerFulfilledClaim"
                     },
                     {
-                        name: `${choiceIndex++} Claim money for offer not fulfilled`,
+                        name: `${choiceIndex++} Claim money for offer not fulfilled - The creator of an offer that was not selected can claim back the money escrowed for that offer`,
                         value: "offerUnfulfilledClaim"
                     },
                     {
-                        name: `${choiceIndex++}) Check for new acess tokens issued`,
+                        name: `${choiceIndex++}) Check for new acess tokens issued since last time`,
                         value: "checkForOffersEvents"
                     },
                     {
@@ -162,48 +162,44 @@ async function handleUserInput(): Promise<void> {
             }
         ])
 
-        switch (answers.choice) {
-            case "listAccountBalances":
-                await getAccountsAndBalances(web3MarketplaceInstance); break;
-            case "changeAccount":
-                await changeAccount(); break
-            case "triggerInterledger": {
-                await triggerInterledger(); break;
-            }
-            case "createAuctionRequest": {
-                await handleAuctionRequestCreation(); break;
-            }
-            case "createOffer": {
-                await handleOfferCreation(); break;
-            }
-            case "closeRequest": {
-                await handleRequestClosing(); break;
-            }
-            case "decideRequest": {
-                await handleRequestDecision(); break;
-            }
-            case "settleOffer": {
-                await handleOfferSettlment(); break;
-            }
-            case "offerFulfilledClaim": {
-                await handleRequestCreatorClaim(); break;
-            }
-            case "offerUnfulfilledClaim": {
-                await handleOfferCreatorClaim(); break;
-            }
-            case "checkForOffersEvents": {
-                printNewOffersFulfilled(true)
-                printNewOffersUnfulfilled(true)
-                break
-            }
-            case "checkForPendingEvents": {
-                checkForEventsGenerated(true); break;
-            }
-            case "flipDebug": {
-                flipDebug(); break;
-            }
-            case "exit": { return }
+        try {
+            await performAction(answers.choice)
+        } catch (err) {
+            console.error(err.message)
         }
+    }
+}
+
+async function performAction(actionName: string): Promise<void> {
+    switch (actionName) {
+        case "listAccountBalances":
+            await getAccountsAndBalances(web3MarketplaceInstance); break;
+        case "changeAccount":
+            await changeAccount(); break
+        case "triggerInterledger":
+            await triggerInterledger(); break;
+        case "createAuctionRequest":
+            await handleAuctionRequestCreation(); break;
+        case "createOffer":
+            await handleOfferCreation(); break;
+        case "closeRequest":
+            await handleRequestClosing(); break;
+        case "decideRequest":
+            await handleRequestDecision(); break;
+        case "settleOffer":
+            await handleOfferSettlment(); break;
+        case "offerFulfilledClaim":
+            await handleRequestCreatorClaim(); break;
+        case "offerUnfulfilledClaim":
+            await handleOfferCreatorClaim(); break;
+        case "checkForOffersEvents":
+            printNewOffersFulfilled(true); printNewOffersUnfulfilled(true); break;
+        case "checkForPendingEvents":
+            checkForEventsGenerated(true); break;
+        case "flipDebug":
+            flipDebug(); break;
+        case "exit":
+            return
     }
 }
 
@@ -275,12 +271,12 @@ async function triggerInterledger(): Promise<void> {
 }
 
 async function createTestRequest(marketplace: SMAUGMarketplace, creatorAccount: string): Promise<utils.RequestDetails> {
-    const deadline = new Date("2020-12-31:23:59:59Z")
+    const deadline = new Date("2021-12-31:23:59:59Z")
 
     const accessToken = await getNewAccessToken(creatorAccount)
     const requestID = await submitRequest(marketplace, accessToken, deadline, creatorAccount)
 
-    const startTime = new Date("2021-01-01:00:00:00Z")
+    const startTime = new Date("2022-01-01:00:00:00Z")
     const durationInMinutes = new BN(44640)          // 31 days * 24 hours * 60 minutes
     const minAuctionPricePerMinute = new BN(50)
     const lockerID = new BN(1434123)
@@ -295,7 +291,7 @@ async function createTestRequest(marketplace: SMAUGMarketplace, creatorAccount: 
 async function createTestOffer1(marketplace: SMAUGMarketplace, requestDetails: utils.RequestDetails, creatorAccount: string): Promise<utils.OfferDetails> {
     const offerID = await submitOffer(marketplace, requestDetails.id, creatorAccount)
 
-    const startTime = new Date("2021-01-05:00:00:00Z")
+    const startTime = new Date("2022-01-05:00:00:00Z")
     const durationInMinutes = new BN(21600)                    // 15 days * 24 hours * 60 minutes
     const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
     const newKeyPair = crypto.crypto_box_seed_keypair([1])
@@ -314,7 +310,7 @@ async function createTestOffer1(marketplace: SMAUGMarketplace, requestDetails: u
 async function createTestOffer2(marketplace: SMAUGMarketplace, requestDetails: utils.RequestDetails, creatorAccount: string): Promise<utils.OfferDetails> {
     const offerID = await submitOffer(marketplace, requestDetails.id, creatorAccount)
 
-    const startTime = new Date("2021-01-10:00:00:00Z")
+    const startTime = new Date("2022-01-10:00:00:00Z")
     const durationInMinutes = new BN(4320)                    // 3 days * 24 hours * 60 minutes
     const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
     const newKeyPair = crypto.crypto_box_seed_keypair([2])
@@ -333,7 +329,7 @@ async function createTestOffer2(marketplace: SMAUGMarketplace, requestDetails: u
 async function createTestOffer3(marketplace: SMAUGMarketplace, requestDetails: utils.RequestDetails, creatorAccount: string): Promise<utils.OfferDetails> {
     const offerID = await submitOffer(marketplace, requestDetails.id, creatorAccount)
 
-    const startTime = new Date("2021-01-20:00:00:00Z")
+    const startTime = new Date("2022-01-20:00:00:00Z")
     const durationInMinutes = new BN(14400)                    // 3 days * 24 hours * 60 minutes
     const amount = requestDetails.minAuctionPricePerMinute.mul(new BN(durationInMinutes))
     const newKeyPair = crypto.crypto_box_seed_keypair([2])
@@ -623,7 +619,7 @@ function getRequestClosingQuestions(): inquirer.QuestionCollection {
 async function handleRequestDecision(): Promise<void> {
     const input = await inquirer.prompt(getRequestDecisionQuestions())
     const requestID = new BN(input.requestID)
-    const offerIDs = filterAndConvertOfferIDs(input.offerIDs)
+    const offerIDs = filterAndConvertOfferIDs(cleanOfferIDsInput(input.offerIDs))
 
     console.log(`Deciding request...`)
     await decideRequest(SMAUGMarketplaceInstance, requestID, offerIDs, currentAccount)
@@ -652,7 +648,7 @@ function getRequestDecisionQuestions(): inquirer.QuestionCollection {
             name: "offerIDs",
             message: "IDs of the offers, separated by a comma.",
             validate: (input: string) => {
-                const cleanedInput = input.split(",").map(element => element.trim()).filter(element => element.length > 0)        // Split by comma, remove leading and trailing whitespaces, remove resulting empty strings
+                const cleanedInput = cleanOfferIDsInput(input)
                 if (cleanedInput.length == 0) {
                     return "Not a valid input."
                 }
@@ -663,10 +659,13 @@ function getRequestDecisionQuestions(): inquirer.QuestionCollection {
                 }
 
                 return true
-            },
-
+            }
         }
     ] as inquirer.QuestionCollection
+}
+
+function cleanOfferIDsInput(rawOfferIDs: string): string[] {
+    return rawOfferIDs.split(",").map(element => element.trim()).filter(element => element.length > 0)        // Split by comma, remove leading and trailing whitespaces, remove resulting empty strings
 }
 
 function filterOfferIDs(offerIDs: string[]): string[] {
@@ -906,12 +905,17 @@ async function closeRequest(marketplace: SMAUGMarketplace, requestID: BN, reques
 async function decideRequest(marketplace: SMAUGMarketplace, requestID: BN, winningOfferIDs: BN[], requestCreatorAccount: string): Promise<void> {
     const requestDecisionTransactionResult = await marketplace.methods.decideRequest(requestID.toString(), winningOfferIDs.map(offerID => offerID.toString())).send({from: requestCreatorAccount, gas: 2000000, gasPrice: "1"})
 
-    const txStatus = (requestDecisionTransactionResult.events!.FunctionStatus[0].returnValues.status) as number
-    if (txStatus != 0) {
-        throw new Error(`Request closing failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
+    if (requestDecisionTransactionResult.events!.FunctionStatus.returnValues == undefined) {
+        // All good
+        debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
+    } else {
+        const txStatus = (requestDecisionTransactionResult.events!.FunctionStatus.returnValues.status) as number
+        if (txStatus != 0) {
+            throw new Error(`Offer creation failed with status ${txStatus}. See https://github.com/SOFIE-project/Marketplace/blob/master/solidity/contracts/StatusCodes.sol for additional information.`)
+        } else {
+            debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
+        }
     }
-
-    debug && console.log(`Request ${requestID} decided with winning offers: [${winningOfferIDs}].`)
 }
 
 async function settleOffer(marketplace: SMAUGMarketplace, requestID: BN, offerID: BN, transactionCreatorAccount: string): Promise<void> {
