@@ -279,7 +279,7 @@ async function createTestRequest(marketplace: SMAUGMarketplace, creatorAccount: 
     const startTime = new Date("2022-01-01:00:00:00Z")
     const durationInMinutes = new BN(44640)          // 31 days * 24 hours * 60 minutes
     const minAuctionPricePerMinute = new BN(50)
-    const lockerID = new BN(1434123)
+    const lockerID = new BN(1)
 
     const requestDetails: utils.RequestDetails = { id: requestID, deadline: deadline, startTime: startTime, durationInMinutes: durationInMinutes, minAuctionPricePerMinute: minAuctionPricePerMinute, lockerID: lockerID, creatorAccount: creatorAccount }
 
