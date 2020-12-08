@@ -186,7 +186,7 @@
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright 2020 SOFIE Research at LMF Ericsson Finland / sofie-iot.eu
+   Copyright 2020 LMF Ericsson Finland for SOFIE / sofie-iot.eu
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
