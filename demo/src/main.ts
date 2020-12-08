@@ -9,7 +9,9 @@ import inquirer from "inquirer"
 import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
-import jwtDecode from "jwt-decode";
+import jwtDecode from "jwt-decode"
+
+import { sys } from "typescript"
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -199,7 +201,7 @@ async function performAction(actionName: string): Promise<void> {
         case "flipDebug":
             flipDebug(); break;
         case "exit":
-            return
+            sys.exit(0)
     }
 }
 
