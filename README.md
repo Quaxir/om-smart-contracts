@@ -31,19 +31,14 @@ The `InterledgerSenderInterface` and `InterledgerReceiverInterfaces` from the [S
 ```javascript
 contract InterledgerSenderInterface {
     event InterledgerEventSending(uint256 id, bytes data);
-
     function interledgerCommit(uint256 id) public;
-
     function interledgerCommit(uint256 id, bytes memory data) public;
-
     function interledgerAbort(uint256 id, uint256 reason) public;
 }
 
 contract InterledgerReceiverInterface {
     event InterledgerEventAccepted(uint256 nonce);
-
     event InterledgerEventRejected(uint256 nonce);
-
     function interledgerReceive(uint256 nonce, bytes memory data) public;
 }
 ```
@@ -52,13 +47,9 @@ Furthermore, the SMAUG Marketplace supports all the functionalities of the [SOFI
 
 ```javascript
 event RequestAdded(uint requestID, uint deadline);
-
 event RequestExtraAdded(uint requestID);
-
 event OfferAdded(uint offerID, uint requestID, address offerMaker);
-
 event OfferExtraAdded(uint offerID);
-
 event TradeSettled(uint requestID, uint offerID);
 
 // The following events are specific for the SMAUG smart contract. They are not part of the SOFIE Marketplace smart contracts.
@@ -68,36 +59,21 @@ event RequestClaimable(uint indexed requestID, uint[] offerIDs);    // When all 
 event PaymentCashedOut(uint indexed requestID, uint indexed offerID, uint amount);      // When either the request creator or a losing offer creator claim the Ethers escrowed in an offer, this event is generated.
 
 function getMarketInformation() public view returns (uint8 status, address ownerAddress);
-
 function submitRequest(uint deadline) public returns (uint8 status, uint requestID);
-
 function closeRequest(uint requestIdentifier) public returns (uint8 status);
 function decideRequest(uint requestIdentifier, uint[] memory acceptedOfferIDs) public returns(uint8 status);
-
 function deleteRequest(uint requestIdentifier) public returns (uint8 status);
-
 function submitOffer(uint requestID) public returns (uint8 status, uint offerID);
-
 function getOpenRequestIdentifiers() external view returns (uint8 status, uint[] memory);
-
 function getClosedRequestIdentifiers() external view returns (uint8 status, uint[] memory);
-
 function getRequest(uint requestIdentifier) external view returns (uint8 status, uint deadline, uint stage, address requestMaker);
-
 function getRequestOfferIDs(uint requestIdentifier) external view returns (uint8 status, uint[] memory offerIDs);
-
 function isOfferDefined(uint offerIdentifier) public view returns (uint8 status, bool);
-
 function getOffer(uint offerIdentifier) external view returns (uint8 status, uint requestID, address offerMaker, uint stage);
-
 function isRequestDefined(uint requestIdentifier) public view returns (uint8 status, bool);
-
 function isRequestDecided(uint requestIdentifier) public view returns (uint8 status, bool);
-
 function settleTrade(uint requestID, uint offerID) public returns (uint8 status);
-
 function getRequestDecisionTime(uint requestIdentifier) public view returns (uint8 status, uint);
-
 function getRequestDecision(uint requestIdentifier) public view returns (uint8 status, uint[] memory acceptedOfferIDs);
 ```
 
@@ -105,7 +81,6 @@ Additionally to these functionalities, SMAUG marketplace supports access control
 
 ```javascript
 function resetAccessTokens() public returns (uint8 status);     // Reset the storage for access tokens. All previously used access tokens can now be re-used. Can only be called by one of the smart contract managers
-
 function submitAuthorisedRequest(bytes32 tokenDigest, bytes memory signature, bytes32 nonce, uint deadline) public returns (uint8 status, uint requestID);      // Performs the same action as the submitRequest() function, with the addition that it expects a valid access token that matches the requirements explained above.
 
 ```
