@@ -1,9 +1,54 @@
 # SMAUG Marketplace Smart Contract
 
-This components extends the functionalities of the [SOFIE Marketplace (MP) smart contract](https://github.com/SOFIE-project/Marketplace/tree/master/solidity). The goal of this component is to implement a decentralized, Ethereum-based marketplace that allows for two types of interactions:
+This components extends the functionalities of the [SOFIE Marketplace (MP) smart contract](https://github.com/SOFIE-project/Marketplace/tree/master/solidity). The goal of this component is to implement a decentralized, Ethereum-based marketplace that allows for two types of interactions: auction-like and instant-rent.
 
-1. *auction-style*, where several interested renters compete with each other to present the best offer for the smart locker owner
-2. *instant-rent* , where any interested renter can instantly ensure access to a smart locker for the time specified if the offer fulfills the requirements set by the smart locker owner at request creation time
+## Auction-like interactions
+
+In *auction-like* interactions, the smart locker owner creats an auction, called *request*, specifying the time range in which a smart locker is available for rent and a minimum amount of weis, Ethereum native cryptocurrency, to pay per minute of access. Next, interested renters can compete with each other by requesting access for sections or all of the total rentable time. This is accomplished by submitting *offers* for a given request, and by escrowing weis in the marketplace smart contract as part of the bidding process: this is a proof that, in case the offer is selected for the request, the offer creator is able to pay for the access requested. At any time before the start of the rental period specified in the request upon creation, the smart locker owner can close a request and select one or more winning offers to grant access to the smart locker. The selection process triggers the release of one access token for each offer, and allows the smart locker owner to withdraw the weis escrowed in all the winning offers, and the creators of the offers not selected to claim back the weis previously escrowed.
+
+## Instant-rent interactions
+
+In *instant-rent interactions*, the process follows a similar structure. Smart locker owners create a request specifying the start and end time of the rentable period, and also explicitely indicates that the request also supports instant-rent offers. The smart locker owner then proceeds to specify the rules that allow offers to be automatically selected upon presentation. Specifically, the rules that the smart locker owner must specify are structured in the following way:
+
+```
+    start_of_range_1: number_of_weis_per_minute,
+    start_of_range_2: number_of_weis_per_minute,
+    start_of_range_3: number_of_weis_per_minute,
+    .
+    .
+    .
+    start_of_range_n: number_of_weis_per_minute
+```
+
+An example of rules following this structure is:
+
+```
+    1: 100 000,
+    10: 60 000,
+    60: 20 000,
+    1 440: 5 000,
+    10 080: 1 000,
+    43 200: 500
+```
+
+These rules indicate that:
+
+- Rents that last at least 1 minute must pay at least 100 000 weis per minute of access;
+- Rents that last at least 10 minutes must pay at least 60 000 weis per minute of access;
+- Rents that last at least 60 minutes (1 hour) must pay at least 20 000 weis per minute of access;
+- Rents that last at least 1 440 minutes (24 hours) must pay at least 5 000 weis per minute of access;
+- Rents that last at least 10 080 minutes (7 days) must pay at least 1 000 weis per minute of access;
+- Rents that last at least 43 200 minutes (30 days) must pay at least 500 weis per minute of access;
+
+When interested renters submit instant-rent offers for an amount of minutes, the marketplace smart contract calculates the rule that needs to be applied, and verifies that the total amount of weis offered is greater than or equal to the number of minutes specified in the offers times the minimum number of weis per minute requires. Specifically:
+
+```
+OFFER_VALUE >= OFFER_MINUTES * RULE[OFFER_MINUTES].MIN_WEIS
+```
+
+where `OFFER_VALUE` is the amount of weis sent as part of the offer, `OFFER_MINUTES` is the number of minutes the renter is trying to purchase access for, and `RULE[OFFER_MINUTES]` is the rule matching the smallest value of `start_of_range_n` that is larger than `OFFER_MINUTES`. So by considering the example of rules above, a potential renter trying to instant-rent access for 30 minutes, will have to pay at least `60 000 * 30` weis, as the matching rule for `OFFER_MINUTES = 30` is `(10 minutes: 60 000 wei/minute)`.
+
+Upon presentation of an instant-rent offer fulfilling the requirements of the rule matched, the smart contract automatically closes the request and selects the submitted offer as winning, triggering the same process that is triggered in the auction-like process.
 
 ## Architecture
 
