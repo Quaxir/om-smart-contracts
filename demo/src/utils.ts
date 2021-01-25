@@ -4,6 +4,8 @@ import { sys } from "typescript";
 import urljoin from "url-join"
 import BN from "bn.js";
 import { URL } from "url";
+import { AbiItem } from "web3-utils"
+import Web3 from "web3"
 
 export interface EnvVariables {
     MPAddress: string,
@@ -89,10 +91,10 @@ export function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): EnvV
         console.error("MP_OWNER env variable missing.")
         sys.exit(1)
     }
-    if (MPBackendAddress == undefined) {
-        console.error("MP_BACKEND_ADDRESS env variable missing.")
-        sys.exit(1)
-    }
+    // if (MPBackendAddress == undefined) {
+    //     console.error("MP_BACKEND_ADDRESS env variable missing.")
+    //     sys.exit(1)
+    // }
     
     return { MPAddress, MPABIPath, ethereumMPAddress, MPOwner, MPBackendAddress, MPBackendHost }
 }
@@ -146,4 +148,31 @@ export function offerToString(details: OfferDetails, keyEncodingFunction: (input
 
 export function distanceInMinutes(startDate: Date, endDate: Date): number {
     return Math.ceil((endDate.getTime() - startDate.getTime()) / 60000)
+}
+
+
+// !!!!! Used only to replace the backend for the generation of valid request creation access tokens !!!!!
+export async function generateFunctionSignedTokenWithAccount(contractABI: AbiItem[], functionName: string, actorAddress: string, targetAddress: string, web3Instance: Web3, signerAccount: string): Promise<MarketplaceAccessToken> {
+    const contractFunctionABI = contractABI.filter(input => input.name == functionName)[0]
+    const encodedFunction = web3Instance.eth.abi.encodeFunctionSignature(contractFunctionABI)
+    const randomNonce = web3Instance.utils.randomHex(32)
+    const message = randomNonce+encodedFunction.slice(2)+actorAddress.slice(2)+targetAddress.slice(2)
+    const digest = web3Instance.utils.soliditySha3("\x19Ethereum Signed Message:\n76", randomNonce, encodedFunction, actorAddress, targetAddress)        //soliditySha3() == keccak256(abi.encodePacked())
+    let signature = await web3Instance.eth.sign(message, signerAccount)
+    signature = updateSignatureAgainstMalleability(signature, web3Instance)
+
+    return {digest: digest as string, encoded: message, signature: signature, nonce: randomNonce}
+}
+
+// From https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/cryptography/ECDSA.sol#L50
+function updateSignatureAgainstMalleability(signature: string, web3Instance: Web3) {
+    let v = "0x" + signature.slice(-2)
+    let vDecimal = web3Instance.utils.hexToNumber(v)
+
+    if (vDecimal <= 1) {
+        vDecimal += 27
+        v = web3Instance.utils.numberToHex(vDecimal)
+    }
+
+    return signature.slice(0, signature.length-2) + v.slice(2)
 }

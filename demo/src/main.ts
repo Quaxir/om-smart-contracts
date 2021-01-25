@@ -10,6 +10,7 @@ import { URL } from "url"
 import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode"
+import HDWalletProvider from "@truffle/hdwallet-provider"
 
 import { sys } from "typescript"
 
@@ -33,6 +34,7 @@ var web3MarketplaceInstance: Web3
 var SMAUGMarketplaceInstance: SMAUGMarketplace
 var backendURL: URL
 var backendHost: string | undefined
+var secrets: {mnemonic, projectId}
 
 var unseenEvents: EventLog[] = []
 var unseenOfferFulfilledEvents: OfferFulfilled[] = []
@@ -48,6 +50,7 @@ var currentAccount: string
 async function main(): Promise<void> {
 
     const variables = utils.parseAndReturnEnvVariables(process.env)
+    secrets = JSON.parse(fs.readFileSync("../secrets.json", "utf-8"))
 
     try {
         backendURL = new URL(variables.MPBackendAddress)
@@ -55,7 +58,7 @@ async function main(): Promise<void> {
         throw new Error("Marketplace URL is not a valid URL.")
     }
 
-    web3MarketplaceInstance = new Web3(variables.ethereumMPAddress)
+    web3MarketplaceInstance = new Web3(new HDWalletProvider(secrets.mnemonic, variables.MPAddress))
     SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(variables.MPABIPath).toString()), variables.MPAddress) as any) as SMAUGMarketplace
     backendHost = variables.MPBackendHost
     currentAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]       // Defaults to first account
@@ -73,6 +76,8 @@ function configureEventListener(debug: boolean = false, eventNames: Set<String> 
     SMAUGMarketplaceInstance.events
 
     SMAUGMarketplaceInstance.events.allEvents({}, (error, event) => {
+        if (event == null) { return }
+        
         if (debug) {
             if (error != null) {
                 console.error(`${error.name}\n${error.message}`)

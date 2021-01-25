@@ -15,6 +15,7 @@
         "test:truffle": "npx truffle test",
         "migrate": "npm run build; npx truffle migrate",
         "migrate:marketplace": "npm run migrate -- --network marketplace",
+        "migrate:ropsten": "npm run migrate -- --network ropsten",
         "deploy:marketplace-local": "cd scripts && ./launch_marketplace_blockchain"
     },
     "dependencies": {

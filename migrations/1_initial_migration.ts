@@ -1,6 +1,7 @@
 const Migrations = artifacts.require("Migrations")
 
-module.exports = (async (deployer) => {
+
+module.exports = (async (deployer, network, accounts) => {
   await deployer.deploy(Migrations)
 }) as Truffle.Migration
 

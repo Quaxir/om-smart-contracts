@@ -2,7 +2,7 @@ const AccessTokenLibrary = artifacts.require("AccessTokenLibrary")
 const UtilsLibrary = artifacts.require("UtilsLibrary")
 const SMAUGMarketPlace = artifacts.require("SMAUGMarketPlace")
 
-module.exports = (async (deployer, accounts) => {
+module.exports = (async (deployer, network, accounts) => {
     await deployer.deploy(AccessTokenLibrary)
     await deployer.deploy(UtilsLibrary)
     deployer.link(AccessTokenLibrary, SMAUGMarketPlace)

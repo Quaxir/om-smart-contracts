@@ -5,9 +5,11 @@
     "demo": "ts-node ./src/main.ts",
     "demo:docker": "export $(cat docker.env | xargs) && ts-node ./src/main.ts",
     "demo:local": "export $(cat local.env | xargs) && ts-node ./src/main.ts",
+    "demo:ropsten": "export $(cat ropsten.env | xargs) && ts-node ./src/main.ts",
     "watch": "npx tsc -w"
   },
   "devDependencies": {
+    "@truffle/hdwallet-provider": "^1.2.1",
     "@typechain/web3-v1": "^1.0.0",
     "@types/append-query": "^2.0.0",
     "@types/atob": "^2.1.2",
