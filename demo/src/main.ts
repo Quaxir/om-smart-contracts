@@ -6,8 +6,6 @@ import { SmaugMarketPlace as SMAUGMarketplace, OfferFulfilled, OfferClaimable, R
 
 import * as utils from "./utils"
 import inquirer from "inquirer"
-import { URL } from "url"
-import fetch from "node-fetch"
 import { EventLog } from "web3-core/types"
 import jwtDecode from "jwt-decode"
 import HDWalletProvider from "@truffle/hdwallet-provider"
@@ -32,8 +30,7 @@ process.on('SIGINT', () => {
 
 var web3MarketplaceInstance: Web3
 var SMAUGMarketplaceInstance: SMAUGMarketplace
-var backendURL: URL
-var backendHost: string | undefined
+var mpOwner: string
 var secrets: {mnemonic, projectId}
 
 var unseenEvents: EventLog[] = []
@@ -49,19 +46,17 @@ var currentAccount: string
 
 async function main(): Promise<void> {
 
-    const variables = utils.parseAndReturnEnvVariables(process.env)
     secrets = JSON.parse(fs.readFileSync("../secrets.json", "utf-8"))
 
-    try {
-        backendURL = new URL(variables.MPBackendAddress)
-    } catch(err){
-        throw new Error("Marketplace URL is not a valid URL.")
-    }
+    const variables = utils.parseAndReturnEnvVariables(process.env)
 
-    web3MarketplaceInstance = new Web3(new HDWalletProvider(secrets.mnemonic, variables.MPAddress))
+    web3MarketplaceInstance =  new Web3(new HDWalletProvider(secrets.mnemonic, variables.ethereumMPAddress))
+    // web3MarketplaceInstance = new Web3(variables.ethereumMPAddress)
     SMAUGMarketplaceInstance = (new web3MarketplaceInstance.eth.Contract(JSON.parse(fs.readFileSync(variables.MPABIPath).toString()), variables.MPAddress) as any) as SMAUGMarketplace
-    backendHost = variables.MPBackendHost
     currentAccount = (await web3MarketplaceInstance.eth.getAccounts())[0]       // Defaults to first account
+    mpOwner = variables.MPOwner
+
+    console.log(web3MarketplaceInstance.utils.randomHex(32))
 
     utils.printArgumentsDetails(variables)
 
@@ -353,10 +348,10 @@ async function createTestOffer3(marketplace: SMAUGMarketplace, requestDetails: u
 }
 
 async function handleAuctionRequestCreation(): Promise<void> {
-    const input = await inquirer.prompt(getRequestCreationQuestions())
-    // const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
+    // const input = await inquirer.prompt(getRequestCreationQuestions())
+    const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
 
-    console.log(`Requesting new access token from marketplace backend...`)
+    console.log(`Requesting new access token from marketplace backend (this time is generated locally by this script)...`)
     const accessToken = await getNewAccessToken(currentAccount)
     console.log(accessToken)
 
@@ -854,11 +849,10 @@ function flipDebug() {
 }
 
 async function getNewAccessToken(requestCreatorAccount: string) : Promise<utils.MarketplaceAccessToken> {
-    const backendEndpoint = utils.getBackendEndpoint(backendURL, requestCreatorAccount)
-    const requestCreationTokenHeaders = backendHost == undefined ? null : {"Host": backendHost}
-    const requestCreationTokenResponse = await fetch(backendEndpoint, {headers: requestCreationTokenHeaders})
+    // Generates the token locally instead of going to the server -> No need to deploy om-backend
+    const requestCreationToken = await utils.generateFunctionSignedTokenWithAccount(SMAUGMarketplaceInstance.options.jsonInterface, "submitAuthorisedRequest", requestCreatorAccount, SMAUGMarketplaceInstance.options.address, web3MarketplaceInstance, mpOwner)
 
-    return await requestCreationTokenResponse.json() as utils.MarketplaceAccessToken
+    return await requestCreationToken as utils.MarketplaceAccessToken
 }
 
 async function submitOffer(marketplace: SMAUGMarketplace, requestID: BN, creatorAccount: string): Promise<BN> {

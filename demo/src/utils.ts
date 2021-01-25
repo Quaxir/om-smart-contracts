@@ -102,8 +102,7 @@ export function parseAndReturnEnvVariables(environment: NodeJS.ProcessEnv): EnvV
 export function printArgumentsDetails(options: EnvVariables) {
     console.log(`Arguments used:\n
         - MARKETPLACE ETHEREUM NETWORK ADDRESS: ${options.ethereumMPAddress}\n
-        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.MPAddress}\n
-        - MARKETPLACE BACKEND ADDRESS: ${options.MPBackendAddress}
+        - MARKETPLACE SMART CONTRACT ADDRESS: ${options.MPAddress}
     `)
 }
 
