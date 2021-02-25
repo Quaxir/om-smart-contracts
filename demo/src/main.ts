@@ -11,6 +11,8 @@ import jwtDecode from "jwt-decode"
 import HDWalletProvider from "@truffle/hdwallet-provider"
 
 import { sys } from "typescript"
+import {performance} from "perf_hooks";
+import {log} from "util";
 
 const nacl = require("js-nacl")                         // Mismatch between types and actual library, so using module import fails for the functions we use in this app.
 
@@ -27,6 +29,19 @@ process.on('SIGINT', () => {
     console.log("Bye!");
     process.exit(0);
 });
+
+var log4js = require('log4js');
+log4js.configure({ // configure to use all types in different files.
+    appenders: {
+        dataLogs: {type: 'file', filename: 'data.log'},
+        console: {type: 'console'}
+    },
+    categories :{
+        data: {appenders: ['dataLogs'], level: 'info'},
+        default: {appenders: ['console', 'dataLogs'], level: 'trace'}
+    }
+});
+var logger = log4js.getLogger('data');
 
 var web3MarketplaceInstance: Web3
 var SMAUGMarketplaceInstance: SMAUGMarketplace
@@ -349,32 +364,43 @@ async function createTestOffer3(marketplace: SMAUGMarketplace, requestDetails: u
 
 async function handleAuctionRequestCreation(): Promise<void> {
     // const input = await inquirer.prompt(getRequestCreationQuestions())
-    const input = {requestDeadline: "2020-12-31T23:59:59Z", requestStartingTime: "2021-01-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
+    const input = {requestDeadline: "2021-01-31T23:59:59Z", requestStartingTime: "2021-02-01T00:00:00Z", requestEndTime: "2021-12-31T23:59:59Z", minAuctionPrice: "1", lockerID: "123"}
 
     console.log(`Requesting new access token from marketplace backend (this time is generated locally by this script)...`)
+    let t0_token_fetch = performance.now()
     const accessToken = await getNewAccessToken(currentAccount)
+    let t1_token_fetch = performance.now()
+    logger.info(`access_token_fetching,${t1_token_fetch-t0_token_fetch}`);
     console.log(accessToken)
 
-    await utils.waitForEnter()
+    // await utils.waitForEnter()
     
     // Create request
     const deadline = new Date(input.requestDeadline)
     const deadlineInSeconds = deadline.getTime() / 1000
     console.log(`Creating request with deadline: ${deadline.toUTCString()} (${deadlineInSeconds} s in UNIX epoch)...`)
+    let t0_request_creation = performance.now()
     const requestID = await submitRequest(SMAUGMarketplaceInstance, accessToken, deadline, currentAccount)
+    let t1_request_creation = performance.now()
+    logger.info(`request_creation,${t1_request_creation-t0_request_creation}`)
 
-    await utils.waitForEnter(`Request created with ID ${requestID}. Press Enter to submit the request extra: `)
+    // await utils.waitForEnter(`Request created with ID ${requestID}. Press Enter to submit the request extra: `)
+    console.log(`Request created with ID ${requestID}. Submitting request extra: `)
 
     // Create request extra
     const startDate = new Date(input.requestStartingTime)
     const endDate = new Date(input.requestEndTime)
     const durationInMinutes = new BN(utils.distanceInMinutes(startDate, endDate))
     const requestDetails: utils.RequestDetails = { id: requestID, deadline: deadline, startTime: startDate, durationInMinutes: durationInMinutes, minAuctionPricePerMinute: new BN(input.minAuctionPrice), lockerID: new BN(input.lockerID), creatorAccount: currentAccount }
+    let t0_request_extra = performance.now()
     await submitRequestExtra(SMAUGMarketplaceInstance, requestDetails)
+    let t1_request_extra = performance.now()
+    logger.info(`request_extra,${t1_request_extra-t0_request_extra}`)
     console.log("Request extra added!")
     console.log(utils.requestToString(requestDetails))
 
-    await utils.waitForEnter("Request creation process completed! Press Enter to continue: ")
+    // await utils.waitForEnter("Request creation process completed! Press Enter to continue: ")
+    console.log(`Request creation process completed!`)
 }
 
 function getRequestCreationQuestions(): inquirer.QuestionCollection {
