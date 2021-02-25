@@ -136,6 +136,10 @@ async function handleUserInput(): Promise<void> {
                         value: "createAuctionRequest"
                     },
                     {
+                        name: `${choiceIndex++}) MEASUREMENT: Create many new auction requests`,
+                        value: "createManyAuctionRequests"
+                    },
+                    {
                         name: `${choiceIndex++}) Create a new offer`,
                         value: "createOffer"
                     },
@@ -197,6 +201,8 @@ async function performAction(actionName: string): Promise<void> {
             await triggerInterledger(); break;
         case "createAuctionRequest":
             await handleAuctionRequestCreation(); break;
+        case "createManyAuctionRequests":
+            await handleManyAuctionRequestCreations(); break;
         case "createOffer":
             await handleOfferCreation(); break;
         case "closeRequest":
@@ -401,6 +407,20 @@ async function handleAuctionRequestCreation(): Promise<void> {
 
     // await utils.waitForEnter("Request creation process completed! Press Enter to continue: ")
     console.log(`Request creation process completed!`)
+}
+
+function delay(ms: number) {
+    return new Promise( resolve => setTimeout(resolve, ms) );
+}
+
+async function handleManyAuctionRequestCreations(): Promise<void> {
+    const delay_time = 1000
+    const request_count = 10;
+    for (let i = 0; i < request_count; i++) {
+        await handleAuctionRequestCreation();
+        console.log(`Sleeping ${delay_time}, ran ${i+1} / ${request_count} measurements`)
+        await delay(delay_time);
+    }
 }
 
 function getRequestCreationQuestions(): inquirer.QuestionCollection {
