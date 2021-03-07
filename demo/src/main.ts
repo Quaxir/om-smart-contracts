@@ -376,7 +376,6 @@ async function handleAuctionRequestCreation(): Promise<void> {
     let t0_token_fetch = performance.now()
     const accessToken = await getNewAccessToken(currentAccount)
     let t1_token_fetch = performance.now()
-    logger.info(`access_token_fetching,${t1_token_fetch-t0_token_fetch}`);
     console.log(accessToken)
 
     // await utils.waitForEnter()
@@ -388,7 +387,8 @@ async function handleAuctionRequestCreation(): Promise<void> {
     let t0_request_creation = performance.now()
     const requestID = await submitRequest(SMAUGMarketplaceInstance, accessToken, deadline, currentAccount)
     let t1_request_creation = performance.now()
-    logger.info(`request_creation,${t1_request_creation-t0_request_creation}`)
+    logger.info(`access_token_fetching,${requestID},${t1_token_fetch-t0_token_fetch}`);
+    logger.info(`request_creation,${requestID},${t1_request_creation-t0_request_creation}`)
 
     // await utils.waitForEnter(`Request created with ID ${requestID}. Press Enter to submit the request extra: `)
     console.log(`Request created with ID ${requestID}. Submitting request extra: `)
@@ -401,7 +401,7 @@ async function handleAuctionRequestCreation(): Promise<void> {
     let t0_request_extra = performance.now()
     await submitRequestExtra(SMAUGMarketplaceInstance, requestDetails)
     let t1_request_extra = performance.now()
-    logger.info(`request_extra,${t1_request_extra-t0_request_extra}`)
+    logger.info(`request_extra,${requestID},${t1_request_extra-t0_request_extra}`)
     console.log("Request extra added!")
     console.log(utils.requestToString(requestDetails))
 
@@ -517,6 +517,8 @@ async function submitRequest(marketplace: SMAUGMarketplace, token: utils.Marketp
 
     debug && console.log(`Request submitted with ID: ${requestID}`)
 
+    logger.info(`gas_usage,request_creation,${requestID},${newRequestTransactionResult.gasUsed},${newRequestTransactionResult.cumulativeGasUsed}`)
+
     return requestID
 }
 
@@ -537,6 +539,8 @@ async function submitRequestExtra(marketplace: SMAUGMarketplace, extra: utils.Re
     }
 
     debug && console.log(`Request extra submitted for ID: ${extra.id.toString()}`)
+
+    logger.info(`gas_usage,request_extra,${extra.id.toString()},${newRequestExtraTransactionResult.gasUsed},${newRequestExtraTransactionResult.cumulativeGasUsed}`)
 }
 
 async function handleOfferCreation(): Promise<void> {
